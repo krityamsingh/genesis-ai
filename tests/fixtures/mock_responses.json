@@ -1,0 +1,21 @@
+{
+  "extraction": {
+    "domain": "programming",
+    "difficulty": "intermediate",
+    "main_topics": ["decorators", "design patterns"],
+    "key_facts": ["@syntax wraps functions", "used in Flask/FastAPI"],
+    "skills": [{"name": "Python Decorators", "level": "intermediate", "domain": "programming", "description": "Using @ syntax", "prerequisites": ["Python basics"], "related": ["closures"]}],
+    "concepts": [{"name": "Decorator Pattern", "definition": "Adds behaviour without modifying original", "domain": "programming", "examples": ["@app.route"], "key_terms": ["wrapper", "closure"]}],
+    "summary": "Decorators allow extending function behaviour using the @ syntax."
+  },
+  "learn_response": {
+    "response": "Learned successfully.",
+    "knowledge_items_stored": 5,
+    "domain": "programming",
+    "difficulty": "intermediate",
+    "skills_found": 1,
+    "concepts_found": 1,
+    "duration_sec": 1.2,
+    "error": null
+  }
+}
