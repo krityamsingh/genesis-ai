@@ -1,0 +1,18 @@
+groups:
+  - name: genesis_alerts
+    rules:
+      - alert: APIHighLatency
+        expr: http_request_duration_seconds{quantile="0.95"} > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "GENESIS API p95 latency > 5s"
+
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "GENESIS API error rate > 5%"
