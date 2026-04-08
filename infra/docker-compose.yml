@@ -1,0 +1,78 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    ports:
+      - "8000:8000"
+    env_file: ../.env
+    environment:
+      - DATABASE_URL=postgresql://genesis:genesis@db:5432/genesis
+      - REDIS_URL=redis://redis:6379/0
+      - KG_PERSIST_DIR=/data/kg
+    volumes:
+      - kg_data:/data/kg
+      - ../data:/app/data
+    depends_on:
+      - db
+      - redis
+      - chromadb
+
+  celery:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    command: celery -A tasks.celery_app worker --loglevel=info
+    env_file: ../.env
+    environment:
+      - DATABASE_URL=postgresql://genesis:genesis@db:5432/genesis
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+      - db
+
+  celery-beat:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    command: celery -A tasks.celery_beat beat --loglevel=info
+    env_file: ../.env
+    depends_on:
+      - redis
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER:     genesis
+      POSTGRES_PASSWORD: genesis
+      POSTGRES_DB:       genesis
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server /etc/redis/redis.conf
+    volumes:
+      - ./redis.conf:/etc/redis/redis.conf
+
+  chromadb:
+    image: chromadb/chroma:latest
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma_data:/chroma/.chroma
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ../monitoring/alerts.yml:/etc/prometheus/alerts.yml
+    ports:
+      - "9090:9090"
+
+volumes:
+  kg_data:
+  pg_data:
+  chroma_data:
