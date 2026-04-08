@@ -1,0 +1,20 @@
+{
+  "title": "GENESIS Dashboard",
+  "panels": [
+    {
+      "title": "API Request Rate",
+      "type": "graph",
+      "targets": [{ "expr": "rate(http_requests_total[5m])" }]
+    },
+    {
+      "title": "API p95 Latency",
+      "type": "graph",
+      "targets": [{ "expr": "http_request_duration_seconds{quantile='0.95'}" }]
+    },
+    {
+      "title": "KG Documents",
+      "type": "stat",
+      "targets": [{ "expr": "genesis_kg_documents_total" }]
+    }
+  ]
+}
