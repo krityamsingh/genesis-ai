@@ -1,0 +1,14 @@
+{
+  "name": "genesis-global-panel",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": { "dev": "vite", "build": "vite build" },
+  "dependencies": {
+    "react": "^18.3.0", "react-dom": "^18.3.0",
+    "axios": "^1.7.0", "recharts": "^2.12.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.0", "vite": "^5.2.0",
+    "tailwindcss": "^3.4.0", "autoprefixer": "^10.4.0"
+  }
+}
