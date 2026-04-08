@@ -1,5 +1,6 @@
 # api/main.py — FastAPI application factory
 from __future__ import annotations
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -10,6 +11,8 @@ from api.middleware        import logging_middleware
 from api.routes            import register_routes
 from api.websocket         import ws_stream_endpoint
 from database.db           import init_db
+
+log = logging.getLogger("api.main")
 
 
 def create_app() -> FastAPI:
@@ -35,6 +38,24 @@ def create_app() -> FastAPI:
 
     # WebSocket
     app.add_websocket_route("/ws/stream", ws_stream_endpoint)
+
+    # DB init on startup — wrapped so a DB error doesn't crash the whole app
+    @app.on_event("startup")
+    async def startup():
+        try:
+            init_db()
+            log.info("Database initialised successfully.")
+        except Exception as e:
+            log.error(f"DB init failed (non-fatal): {e}")
+
+    @app.get("/health")
+    async def health():
+        return {"status": "ok", "service": "genesis-api"}
+
+    return app
+
+
+app = create_app()    app.add_websocket_route("/ws/stream", ws_stream_endpoint)
 
     # DB init on startup
     @app.on_event("startup")
