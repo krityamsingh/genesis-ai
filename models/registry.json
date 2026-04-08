@@ -1,0 +1,32 @@
+{
+  "models": [
+    {
+      "key": "default",
+      "hf_id": "google/gemma-3-27b-it",
+      "description": "Gemma 3 27B — best quality, vision-capable",
+      "context_tokens": 8192,
+      "vision": true
+    },
+    {
+      "key": "fast",
+      "hf_id": "google/gemma-3-12b-it",
+      "description": "Gemma 3 12B — faster, lower cost",
+      "context_tokens": 8192,
+      "vision": false
+    },
+    {
+      "key": "mini",
+      "hf_id": "google/gemma-3-4b-it",
+      "description": "Gemma 3 4B — quickest, lowest cost",
+      "context_tokens": 4096,
+      "vision": false
+    },
+    {
+      "key": "code",
+      "hf_id": "google/codegemma-7b-it",
+      "description": "CodeGemma 7B — code generation specialist",
+      "context_tokens": 8192,
+      "vision": false
+    }
+  ]
+}
