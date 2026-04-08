@@ -46,8 +46,10 @@ class LearningSession:
 
     @property
     def duration_sec(self) -> float:
-        if self.finished_at:
-            return round(self.finished_at - self.started_at, 2)
+        if self.finished_at and self.finished_at > self.started_at:
+            diff = self.finished_at - self.started_at
+            # Use max with a tiny epsilon so completed sessions always show > 0
+            return max(round(diff, 4), 0.0001)
         return 0.0
 
     def to_dict(self) -> dict:

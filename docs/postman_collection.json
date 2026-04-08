@@ -1,0 +1,31 @@
+{
+  "info": { "name": "GENESIS API", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json" },
+  "item": [
+    {
+      "name": "Learn",
+      "request": {
+        "method": "POST",
+        "url": "{{base_url}}/core/learn",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "body": { "mode": "raw", "raw": "{\"source\": \"https://example.com\"}", "options": { "raw": { "language": "json" } } }
+      }
+    },
+    {
+      "name": "Ask",
+      "request": {
+        "method": "POST",
+        "url": "{{base_url}}/core/ask",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "body": { "mode": "raw", "raw": "{\"query\": \"What is backpropagation?\"}" , "options": { "raw": { "language": "json" } } }
+      }
+    },
+    {
+      "name": "Stats",
+      "request": { "method": "GET", "url": "{{base_url}}/core/stats", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }] }
+    }
+  ],
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8000/api/v1" },
+    { "key": "token",    "value": "" }
+  ]
+}

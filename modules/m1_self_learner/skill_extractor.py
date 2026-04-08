@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from dataclasses import dataclass, field, asdict
@@ -342,5 +343,4 @@ Content to analyse:
         return text[:head] + "\n...[truncated]...\n" + text[-tail:]
 
 
-# ── missing import fix ─────────────────────────────────────
-import hashlib
+

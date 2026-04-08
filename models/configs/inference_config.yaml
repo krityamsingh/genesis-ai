@@ -1,0 +1,6 @@
+default_model: google/gemma-3-27b-it
+fast_model:    google/gemma-3-12b-it
+mini_model:    google/gemma-3-4b-it
+code_model:    google/codegemma-7b-it
+timeout: 120
+max_retries: 3

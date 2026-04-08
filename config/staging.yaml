@@ -1,0 +1,9 @@
+# config/staging.yaml
+app:
+  debug: false
+
+knowledge_graph:
+  persist_dir: "/tmp/genesis_kg_staging"
+
+logging:
+  level: "INFO"

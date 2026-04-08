@@ -1,0 +1,4 @@
+# ChromaDB server config (used in k8s / standalone mode)
+chroma_server_host: "0.0.0.0"
+chroma_server_http_port: 8000
+anonymized_telemetry: false

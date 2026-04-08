@@ -1,0 +1,13 @@
+# config/production.yaml
+app:
+  debug: false
+
+knowledge_graph:
+  persist_dir: "/data/genesis_kg"
+
+logging:
+  level: "WARNING"
+  file: "/var/log/genesis/app.log"
+
+security:
+  rate_limit_per_min: 60

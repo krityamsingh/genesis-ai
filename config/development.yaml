@@ -1,0 +1,16 @@
+# config/development.yaml
+app:
+  debug: true
+
+api:
+  cors_origins:
+    - "*"
+
+knowledge_graph:
+  persist_dir: "./data/dev_kg"
+
+logging:
+  level: "DEBUG"
+
+security:
+  rate_limit_per_min: 1000

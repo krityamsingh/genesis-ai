@@ -1,0 +1,42 @@
+# config/base.yaml — GENESIS base configuration
+app:
+  name: "GENESIS"
+  version: "1.0.0"
+  debug: false
+
+api:
+  host: "0.0.0.0"
+  port: 8000
+  prefix: "/api/v1"
+  cors_origins:
+    - "http://localhost:3000"
+    - "http://localhost:5173"
+
+engine:
+  model: "default"          # default | fast | mini | code
+  timeout: 120
+  max_retries: 3
+  retry_delay: 5
+
+knowledge_graph:
+  backend: "auto"           # auto | chromadb | tfidf
+  persist_dir: ""           # empty = in-memory
+
+memory:
+  max_turns: 20
+
+security:
+  jwt_expire_hours: 24
+  rate_limit_per_min: 60
+
+logging:
+  level: "INFO"
+  file: ""
+
+modules:
+  m1: {enabled: true}
+  m2: {enabled: false}
+  m3: {enabled: false}
+  m4: {enabled: false}
+  m5: {enabled: false}
+  m6: {enabled: false}

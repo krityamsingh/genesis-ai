@@ -1,0 +1,13 @@
+{
+  "texts": [
+    "Python decorators are a design pattern that allows behaviour to be added to functions.",
+    "Transformers use self-attention to process all tokens in parallel.",
+    "Gradient descent minimises loss by moving in the direction of the negative gradient."
+  ],
+  "urls": [],
+  "questions": [
+    "What is a Python decorator?",
+    "How does self-attention work?",
+    "What is gradient descent?"
+  ]
+}
