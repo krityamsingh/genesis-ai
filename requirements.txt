@@ -27,7 +27,7 @@ sqlalchemy>=2.0.0
 alembic>=1.13.0
 
 # PostgreSQL driver — uncomment if using DATABASE_URL=postgresql://...
-# psycopg2-binary>=2.9.0
+psycopg2-binary>=2.9.0
 
 
 # ── AI / HuggingFace (REQUIRED — the Gemma engine) ───────────
@@ -53,13 +53,13 @@ pyyaml>=6.0.0
 
 
 # ── TTS — Text to Speech (optional, used by core/voice_interface.py) ─
- gTTS requires an internet connection (Google TTS API)
+# gTTS requires an internet connection (Google TTS API)
  gtts>=2.5.0
 
- pyttsx3 — offline TTS fallback
+# pyttsx3 — offline TTS fallback
  pyttsx3>=2.90
 
- pygame — audio playback for speak_and_play()
+# pygame — audio playback for speak_and_play()
  pygame>=2.5.0
 
 
@@ -70,16 +70,16 @@ pyyaml>=6.0.0
 
 
 # ── Vector Store / Semantic Search (optional) ─────────────────
- chromadb enables full semantic search in KnowledgeGraph.
- Without it, the built-in TF-IDF fallback is used automatically.
- chromadb>=0.4.0 requires ~200MB+ and is NOT compatible with Vercel.
- Uncomment for local / Docker deployments only.
+# chromadb enables full semantic search in KnowledgeGraph.
+# Without it, the built-in TF-IDF fallback is used automatically.
+# chromadb>=0.4.0 requires ~200MB+ and is NOT compatible with Vercel.
+ # Uncomment for local / Docker deployments only.
  chromadb>=0.4.0
 
 
- ── Task Queue (optional, NOT supported on Vercel) ────────────
- Celery + Redis are used by tasks/ for background jobs.
- On Vercel, serverless functions are stateless — use Railway/Render
- for a persistent Celery worker instead.
+# ── Task Queue (optional, NOT supported on Vercel) ────────────
+ # Celery + Redis are used by tasks/ for background jobs.
+# On Vercel, serverless functions are stateless — use Railway/Render
+# for a persistent Celery worker instead.
  celery>=5.3.0
  redis>=5.0.0
