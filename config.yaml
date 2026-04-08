@@ -1,0 +1,3 @@
+# config.yaml — active config (loaded at runtime, ENV overrides apply)
+# Change 'env' to switch config profile.
+env: development

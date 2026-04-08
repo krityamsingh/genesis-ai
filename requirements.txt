@@ -1,0 +1,45 @@
+# GENESIS — Python dependencies
+
+# Core AI
+huggingface-hub>=0.22.0
+
+# API
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+starlette>=0.36.0
+pydantic>=2.6.0
+
+# Database
+sqlalchemy>=2.0.0
+alembic>=1.13.0
+
+# Optional: PostgreSQL (use sqlite for dev)
+# psycopg2-binary>=2.9.0
+
+# Task queue
+celery>=5.3.0
+redis>=5.0.0
+
+# Knowledge graph (semantic search — optional)
+chromadb>=0.4.0
+
+# Ingestion
+requests>=2.31.0
+PyPDF2>=3.0.0
+# pypdf>=4.0.0         # alternative to PyPDF2
+
+# Audio / video
+openai-whisper>=20231117
+# ffmpeg must be installed via system package manager
+
+# TTS (optional)
+gTTS>=2.5.0
+# pyttsx3>=2.90        # offline TTS fallback
+# pygame>=2.5.0        # audio playback
+
+# Security
+python-jose[cryptography]>=3.3.0
+
+# Utils
+python-dotenv>=1.0.0
+pyyaml>=6.0.0
