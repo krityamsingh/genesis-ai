@@ -36,8 +36,8 @@ def create_app() -> FastAPI:
     # Routes
     register_routes(app)
 
-    # WebSocket
-    app.add_websocket_route("/ws/stream", ws_stream_endpoint)
+    # WebSocket — fixed: renamed to add_api_websocket_route in FastAPI 0.99+
+    app.add_api_websocket_route("/ws/stream", ws_stream_endpoint)
 
     # DB init on startup — wrapped so a DB error doesn't crash the whole app
     @app.on_event("startup")
@@ -47,20 +47,6 @@ def create_app() -> FastAPI:
             log.info("Database initialised successfully.")
         except Exception as e:
             log.error(f"DB init failed (non-fatal): {e}")
-
-    @app.get("/health")
-    async def health():
-        return {"status": "ok", "service": "genesis-api"}
-
-    return app
-
-
-app = create_app()    app.add_websocket_route("/ws/stream", ws_stream_endpoint)
-
-    # DB init on startup
-    @app.on_event("startup")
-    async def startup():
-        init_db()
 
     @app.get("/health")
     async def health():
