@@ -1,6 +1,7 @@
 # api/main.py — FastAPI application factory
 from __future__ import annotations
 import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -15,11 +16,24 @@ from database.db           import init_db
 log = logging.getLogger("api.main")
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup / shutdown lifecycle handler (replaces deprecated on_event)."""
+    try:
+        init_db()
+        log.info("Database initialised successfully.")
+    except Exception as e:
+        log.error(f"DB init failed (non-fatal): {e}")
+    yield
+    # shutdown logic here if needed
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="GENESIS API",
         version="1.0.0",
         description="GENESIS AI — Self-Learning System",
+        lifespan=lifespan,
     )
 
     # CORS
@@ -36,17 +50,8 @@ def create_app() -> FastAPI:
     # Routes
     register_routes(app)
 
-    # WebSocket — fixed: renamed to add_api_websocket_route in FastAPI 0.99+
+    # WebSocket
     app.add_api_websocket_route("/ws/stream", ws_stream_endpoint)
-
-    # DB init on startup — wrapped so a DB error doesn't crash the whole app
-    @app.on_event("startup")
-    async def startup():
-        try:
-            init_db()
-            log.info("Database initialised successfully.")
-        except Exception as e:
-            log.error(f"DB init failed (non-fatal): {e}")
 
     @app.get("/health")
     async def health():
