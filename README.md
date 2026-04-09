@@ -1,3 +1,6 @@
+> [!WARNING]
+> 🚧 **This project is currently under active development and testing. Expect breaking changes. Not production-ready yet.**
+
 <div align="center">
 
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
