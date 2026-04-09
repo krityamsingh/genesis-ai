@@ -1,0 +1,34 @@
+name: Lint
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  lint:
+    name: flake8 + black + isort
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install linters
+        run: pip install flake8 black isort
+
+      - name: flake8
+        run: flake8 . --max-line-length=100 --exclude=.git,__pycache__,node_modules,migrations,notebooks
+
+      - name: black (check only)
+        run: black --check --line-length=100 .
+
+      - name: isort (check only)
+        run: isort --check-only --profile=black --line-length=100 .
