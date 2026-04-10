@@ -7,8 +7,10 @@ WORKDIR /frontend
 COPY frontend/package.json ./
 RUN npm install
 
-# Copy the rest of the frontend source and build
+# Copy the rest of the frontend source
 COPY frontend/ ./
+# Vite expects index.html at the project root, not inside public/
+RUN if [ ! -f index.html ] && [ -f public/index.html ]; then cp public/index.html index.html; fi
 RUN npm run build
 # Output: /frontend/dist
 
