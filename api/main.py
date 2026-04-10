@@ -33,7 +33,9 @@ async def lifespan(app: FastAPI):
     """Startup / shutdown lifecycle handler."""
     try:
         init_db()
-        log.info("Database initialised successfully.")
+        from database.seeds import seed_all
+        seed_all()
+        log.info("Database initialised and seeded successfully.")
     except Exception as e:
         log.error(f"DB init failed (non-fatal): {e}")
     yield
