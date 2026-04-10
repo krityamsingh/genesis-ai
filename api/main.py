@@ -1,3 +1,7 @@
+"""
+GENESIS — The Autonomous AI Intelligence Engine.
+Main entry point for the Genesis FastAPI Backend.
+"""
 # api/main.py — FastAPI application factory
 from __future__ import annotations
 import logging
