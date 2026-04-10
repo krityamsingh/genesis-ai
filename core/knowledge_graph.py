@@ -1,3 +1,7 @@
+"""
+GENESIS — Knowledge Graph (KG) Core.
+Manages semantic storage and retrieval using ChromaDB or TF-IDF.
+"""
 # ============================================================
 # core/knowledge_graph.py
 # GENESIS — Knowledge Graph (Vector Store)
