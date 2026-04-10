@@ -10,10 +10,22 @@ export default function Dashboard() {
   const [source,  setSource]  = useState('')
   const [query,   setQuery]   = useState('')
   const [learnOk, setLearnOk] = useState(null)
+  const [exportStatus, setExportStatus] = useState(null)
 
   const handleLearn = async () => {
     const res = await learn(source)
     if (res) { setLearnOk(res); setSource('') }
+  }
+
+  const handleExport = async () => {
+    setExportStatus({ loading: true })
+    try {
+      const resp = await fetch('/api/v1/core/export-dataset', { method: 'POST' })
+      const data = await resp.json()
+      setExportStatus(data)
+    } catch (e) {
+      setExportStatus({ status: 'error', message: e.message })
+    }
   }
 
   const handleAsk = async (e) => {
@@ -72,12 +84,24 @@ export default function Dashboard() {
               placeholder="Inject URL, file path, or raw knowledge stream..."
               className="w-full bg-slate-900/50 border border-white/5 rounded-xl px-4 py-3 text-sm text-slate-200 placeholder-slate-600 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
             />
-            <Button onClick={handleLearn} loading={learnLoading} disabled={!source.trim()} className="w-full py-4 shadow-lg shadow-indigo-500/20">
-              Synchronize Knowledge
-            </Button>
+            <div className="flex gap-3">
+              <Button onClick={handleLearn} loading={learnLoading} disabled={!source.trim()} className="flex-1 py-4 shadow-lg shadow-indigo-500/20">
+                Synchronize Knowledge
+              </Button>
+              <Button onClick={handleExport} loading={exportStatus?.loading} variant="secondary" className="px-6 border-slate-700/50">
+                🚀 Export Dataset
+              </Button>
+            </div>
+            
             {learnOk && (
-              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 text-sm text-emerald-400">
-                <span className="font-bold">Protocol Sync Complete:</span> {learnOk.knowledge_items_stored} neurons mapped across {learnOk.domain}
+              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 text-sm text-emerald-400 animate-fade-in">
+                <span className="font-bold">Protocol Sync Complete:</span> {learnOk.knowledge_items_stored} neurons mapped
+              </div>
+            )}
+
+            {exportStatus?.status === 'success' && (
+              <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-4 text-sm text-indigo-400 animate-fade-in">
+                <span className="font-bold">Neural Dataset Ready:</span> {exportStatus.records} records exported to storage.
               </div>
             )}
           </div>

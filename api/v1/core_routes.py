@@ -77,3 +77,20 @@ async def stats(
         "router": router_.stats(),
         "m1":     m1.stats(),
     }
+
+
+@router.post("/export-dataset")
+async def export_dataset(kg=Depends(get_kg)):
+    """Trigger the generation of a training dataset from stored knowledge."""
+    from core.dataset_generator import DatasetGenerator
+    generator = DatasetGenerator(kg)
+    try:
+        path = generator.generate_sft_dataset()
+        stats = generator.stats()
+        return {
+            "status": "success",
+            "file_path": path,
+            "records": stats["estimated_records"]
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
