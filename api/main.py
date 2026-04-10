@@ -2,8 +2,12 @@
 from __future__ import annotations
 import logging
 import os
+from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+# Load environment variables from .env
+load_dotenv()
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -64,6 +68,17 @@ def create_app() -> FastAPI:
     @app.get("/health")
     async def health():
         return {"status": "ok", "service": "genesis-api"}
+
+    @app.get("/")
+    async def root():
+        if FRONTEND_DIST.exists():
+            return FileResponse(str(FRONTEND_DIST / "index.html"))
+        return {
+            "message": "GENESIS API is running",
+            "docs": "/docs",
+            "health": "/health",
+            "frontend_status": "Development mode (run frontend via npm run dev on port 5173)"
+        }
 
     # ── Frontend static files ─────────────────────────────
     # Only mount if the dist folder was built (it won't exist in pure-API mode)

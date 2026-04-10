@@ -166,9 +166,33 @@ class KnowledgeGraph:
     # ── chromadb init ─────────────────────────────────────
 
     def _init_chroma(self, persist_dir: Optional[str]):
-        if persist_dir:
+        import os
+        host = os.getenv("CHROMA_HOST", "")
+        
+        if host:
+            # Remote mode (e.g. Chroma Cloud)
+            api_key = os.getenv("CHROMA_API_KEY", "")
+            tenant  = os.getenv("CHROMA_TENANT", "default_tenant")
+            db_name = os.getenv("CHROMA_DATABASE", "default_database")
+            
+            settings = ChromaSettings(anonymized_telemetry=False)
+            if api_key:
+                settings.chroma_client_auth_provider = "chromadb.auth.token.TokenAuthClientProvider"
+                settings.chroma_client_auth_credentials = api_key
+            
+            self._chroma = chromadb.HttpClient(
+                host=host,
+                tenant=tenant,
+                database=db_name,
+                settings=settings,
+                ssl=host.startswith("https")
+            )
+            print(f"[KnowledgeGraph] Connected to remote Chroma: {host}")
+        elif persist_dir:
+            # Local persistent mode
             self._chroma = chromadb.PersistentClient(path=persist_dir)
         else:
+            # Ephemeral mode
             self._chroma = chromadb.Client(
                 ChromaSettings(anonymized_telemetry=False)
             )

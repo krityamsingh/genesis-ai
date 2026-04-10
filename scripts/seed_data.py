@@ -4,6 +4,11 @@ scripts/seed_data.py — seed DB + KG with sample data.
 Usage: python scripts/seed_data.py
 """
 import sys, os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from database.seeds import seed_all

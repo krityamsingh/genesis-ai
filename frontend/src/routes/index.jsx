@@ -6,6 +6,7 @@ import Loader        from '../components/Loader'
 import NotFound      from '../components/NotFound'
 
 const App        = lazy(() => import('../App'))
+const Login      = lazy(() => import('../Login'))
 const Dashboard  = lazy(() => import('../Dashboard'))
 const ModulePanel= lazy(() => import('../ModulePanel'))
 const KnowledgeG = lazy(() => import('../KnowledgeGraph'))
@@ -26,6 +27,7 @@ const router = createBrowserRouter([
       { path: 'voice',       element: wrap(<VoiceInput />) },
     ],
   },
+  { path: 'login', element: wrap(<Login />) },
   { path: '*', element: <NotFound /> },
 ])
 

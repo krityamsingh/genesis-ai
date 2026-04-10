@@ -18,17 +18,18 @@ def seed_all():
 
 def _seed_admin(db):
     import os
-    if db.query(User).filter_by(username="admin").first():
+    username = os.getenv("ADMIN_USERNAME", "admin")
+    if db.query(User).filter_by(username=username).first():
         return
     admin = User(
         id        = str(uuid.uuid4()),
-        username  = "admin",
+        username  = username,
         email     = os.getenv("ADMIN_EMAIL", "admin@genesis.local"),
         hashed_pw = hash_password(os.getenv("ADMIN_PASSWORD", "changeme")),
         is_admin  = True,
     )
     db.add(admin)
-    print("[Seeds] Created admin user.")
+    print(f"[Seeds] Created admin user: {username}")
 
 
 def _seed_module_states(db):

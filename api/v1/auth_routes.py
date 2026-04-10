@@ -33,9 +33,11 @@ async def login(form: OAuth2PasswordRequestForm = Depends()):
                 raise HTTPException(status_code=401, detail="Invalid credentials.")
 
             user.last_login = time.time()
-            token = create_token(user.id, is_admin=bool(user.is_admin))
+            is_admin = bool(user.is_admin)
+            token = create_token(user.id, is_admin=is_admin)
 
-        log.info(f"User '{form.username}' logged in (admin={user.is_admin})")
+            log.info(f"User '{form.username}' logged in (admin={is_admin})")
+
         return {"access_token": token, "token_type": "bearer"}
 
     except HTTPException:
