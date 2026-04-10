@@ -8,10 +8,17 @@
 .mypy_cache
 .ruff_cache
 
-# Frontend dependency trees are rebuilt in their own pipelines
+# Dependencies
 **/node_modules
+**/venv
+**/.venv
+env/
+**/ENV
 
 # Local artifacts
 .env
 *.log
+genesis.db
+data/
 notebooks
+.DS_Store
