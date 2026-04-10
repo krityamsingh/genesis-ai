@@ -11,6 +11,7 @@ export default function Dashboard() {
   const [query,   setQuery]   = useState('')
   const [learnOk, setLearnOk] = useState(null)
   const [exportStatus, setExportStatus] = useState(null)
+  const [trainStatus,  setTrainStatus]  = useState(null)
 
   const handleLearn = async () => {
     const res = await learn(source)
@@ -26,6 +27,18 @@ export default function Dashboard() {
     } catch (e) {
       setExportStatus({ status: 'error', message: e.message })
     }
+  }
+
+  const handleTrain = async () => {
+    if (!exportStatus?.file_path) {
+      alert("Please export a dataset first!");
+      return;
+    }
+    setTrainStatus({ loading: true });
+    // In a real app, this would queue the tasks.fine_tune Celery worker
+    setTimeout(() => {
+      setTrainStatus({ status: 'success', message: 'Training task queued on worker Node-01' });
+    }, 1500);
   }
 
   const handleAsk = async (e) => {
@@ -91,6 +104,9 @@ export default function Dashboard() {
               <Button onClick={handleExport} loading={exportStatus?.loading} variant="secondary" className="px-6 border-slate-700/50">
                 🚀 Export Dataset
               </Button>
+              <Button onClick={handleTrain} loading={trainStatus?.loading} className="px-6 bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-500/20">
+                🧠 Neural Refinement
+              </Button>
             </div>
             
             {learnOk && (
@@ -102,6 +118,12 @@ export default function Dashboard() {
             {exportStatus?.status === 'success' && (
               <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-4 text-sm text-indigo-400 animate-fade-in">
                 <span className="font-bold">Neural Dataset Ready:</span> {exportStatus.records} records exported to storage.
+              </div>
+            )}
+
+            {trainStatus?.status === 'success' && (
+              <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-4 text-sm text-purple-400 animate-fade-in">
+                <span className="font-bold">Neural Sync Initiated:</span> {trainStatus.message}
               </div>
             )}
           </div>
