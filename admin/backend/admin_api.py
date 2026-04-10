@@ -153,3 +153,27 @@ async def clear_prompts(_=Depends(_auth)):
 async def start_train(body: TrainingBody, _=Depends(_auth)):
     result = start_training(body.model_id, body.dataset_path, body.config)
     return result
+
+
+# ── KG management (previously in api/v1/admin_routes.py) ─────────────────────
+@admin_app.get("/kg/stats")
+async def kg_stats(_=Depends(_auth)):
+    return get_kg().stats()
+
+
+@admin_app.post("/kg/reset/{collection}")
+async def kg_reset(collection: str, _=Depends(_auth)):
+    get_kg().reset(collection)
+    return {"ok": True, "message": f"Collection '{collection}' cleared."}
+
+
+@admin_app.post("/kg/reset-all")
+async def kg_reset_all(_=Depends(_auth)):
+    get_kg().reset_all()
+    return {"ok": True, "message": "All KG collections cleared."}
+
+
+@admin_app.get("/m1/stats")
+async def m1_stats(_=Depends(_auth)):
+    from api.dependencies import get_m1
+    return get_m1().stats()
