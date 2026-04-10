@@ -4,8 +4,8 @@ FROM node:20-alpine AS frontend-builder
 WORKDIR /frontend
 
 # Copy only package files first for better Docker layer caching
-COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm ci --prefer-offline
+COPY frontend/package.json ./
+RUN npm install
 
 # Copy the rest of the frontend source and build
 COPY frontend/ ./
