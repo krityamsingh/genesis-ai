@@ -1,0 +1,1 @@
+Check dependency correctness, import hygiene, and external integration risk.

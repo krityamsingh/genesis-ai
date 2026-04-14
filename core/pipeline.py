@@ -1,0 +1,2 @@
+"""Main generation pipeline wiring."""
+

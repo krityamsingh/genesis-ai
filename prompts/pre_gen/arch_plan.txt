@@ -1,0 +1,1 @@
+Define architecture boundaries, data flow, and ownership before coding.
