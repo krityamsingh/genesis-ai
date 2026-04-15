@@ -9,26 +9,18 @@
       }
     },
     {
-      "src": "api/main.py",
+      "src": "api/index.py",
       "use": "@vercel/python"
     }
   ],
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "api/main.py"
-    },
-    {
-      "src": "/core/(.*)",
-      "dest": "api/main.py"
+      "dest": "api/index.py"
     },
     {
       "src": "/health",
-      "dest": "api/main.py"
-    },
-    {
-      "src": "/ws/(.*)",
-      "dest": "api/main.py"
+      "dest": "api/index.py"
     },
     {
       "src": "/(.*)",
@@ -36,8 +28,24 @@
     }
   ],
   "env": {
-    "DATABASE_URL": "@database_url",
-    "SECRET_KEY": "@secret_key",
-    "CORS_ORIGINS": "@cors_origins"
-  }
+    "DATABASE_URL":   "@database_url",
+    "JWT_SECRET":     "@jwt_secret",
+    "HF_TOKEN":       "@hf_token",
+    "GEMMA_MODEL":    "@gemma_model",
+    "CORS_ORIGINS":   "@cors_origins",
+    "REDIS_URL":      "@redis_url",
+    "GEMINI_API_KEY": "@gemini_api_key",
+    "OPENAI_API_KEY": "@openai_api_key",
+    "GROK_API_KEY":   "@grok_api_key"
+  },
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options",        "value": "DENY" },
+        { "key": "X-XSS-Protection",       "value": "1; mode=block" }
+      ]
+    }
+  ]
 }
