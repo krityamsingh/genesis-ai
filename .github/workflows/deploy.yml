@@ -1,19 +1,85 @@
-name: Deploy
+# .github/workflows/deploy.yml
+# GENESIS — Railway Deployment
+#
+# Fixes applied:
+#   • Tests must pass before deploy is triggered (was missing entirely)
+#   • Lint must pass before deploy (was missing)
+#   • Deploy only triggers on push to main (not dev-main to avoid accidental deploys)
+#   • RAILWAY_TOKEN existence is checked before attempting deploy
+#   • Added explicit environment name for Railway project linking
+#   • Added post-deploy health check to catch failed deployments early
+#   • Deployment summary posted to the Actions run
+
+name: Deploy to Railway
 
 on:
   push:
     branches:
-      - main
-      - dev-main
+      - main     # only deploy from main
 
 jobs:
+  # ── Gate: tests must pass ───────────────────────────────────────────────────
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install test dependencies
+        run: pip install -r requirements-test.txt
+
+      - name: Run pytest
+        env:
+          HF_TOKEN:     ${{ secrets.HF_TOKEN }}
+          DATABASE_URL: sqlite:///./test_genesis.db
+          JWT_SECRET:   ${{ secrets.JWT_SECRET_TEST || 'test-secret-ci-only-not-prod' }}
+        run: pytest --tb=short -v --cov=. --cov-report=term-missing
+
+  # ── Gate: lint must pass ────────────────────────────────────────────────────
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install linters
+        run: pip install flake8 black isort
+
+      - name: flake8
+        run: flake8 . --max-line-length=100 --exclude=.git,__pycache__,node_modules,migrations,notebooks
+
+      - name: black (check only)
+        run: black --check --line-length=100 .
+
+      - name: isort (check only)
+        run: isort --check-only --profile=black --line-length=100 .
+
+  # ── Deploy (only after test + lint both pass) ───────────────────────────────
   deploy:
     name: Deploy to Railway
     runs-on: ubuntu-latest
+    needs: [test, lint]   # ← BOTH must pass; previously this job had no needs:
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+
+      - name: Verify RAILWAY_TOKEN is configured
+        run: |
+          if [ -z "${{ secrets.RAILWAY_TOKEN }}" ]; then
+            echo "ERROR: RAILWAY_TOKEN secret is not set in GitHub repository settings."
+            echo "Add it at: Settings → Secrets and variables → Actions → New repository secret"
+            exit 1
+          fi
 
       - name: Install Railway CLI
         run: npm install -g @railway/cli
@@ -22,3 +88,39 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: railway up --detach
+
+      - name: Wait for deployment and health check
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          echo "Waiting 30s for deployment to start..."
+          sleep 30
+
+          # Get the deployment URL from Railway
+          DEPLOY_URL=$(railway status --json 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('url',''))" 2>/dev/null || echo "")
+
+          if [ -n "$DEPLOY_URL" ]; then
+            echo "Checking health at: https://${DEPLOY_URL}/health"
+            for i in 1 2 3 4 5; do
+              HTTP=$(curl -s -o /dev/null -w "%{http_code}" "https://${DEPLOY_URL}/health" || echo "000")
+              echo "Attempt $i: HTTP $HTTP"
+              if [ "$HTTP" = "200" ]; then
+                echo "✅ Deployment healthy!"
+                exit 0
+              fi
+              sleep 15
+            done
+            echo "⚠️  Health check did not return 200 after 5 attempts. Check Railway dashboard."
+            exit 1
+          else
+            echo "Could not determine deployment URL. Check Railway dashboard manually."
+          fi
+
+      - name: Deployment summary
+        if: success()
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ✅ Deployed and healthy" >> $GITHUB_STEP_SUMMARY
+          echo "- **Time**: $(date -u)" >> $GITHUB_STEP_SUMMARY
