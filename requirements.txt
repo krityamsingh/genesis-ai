@@ -1,49 +1,79 @@
-# =============================================================
-# GENESIS — requirements.txt (Railway-ready)
-# =============================================================
+# =============================================================================
+# GENESIS — requirements.txt
+#
+# Fixes applied:
+#   • Added all training dependencies (torch, transformers, peft, trl, datasets,
+#     bitsandbytes, accelerate) — previously missing, crashed Celery worker
+#   • Uncommented chromadb (required by KnowledgeGraph)
+#   • Added google-generativeai and openai + xai for multi-provider caller
+#   • Pinned versions to avoid silent breaking upgrades
+#   • Separated core / optional / training sections clearly
+# =============================================================================
 
-# ── Web Framework ─────────────────────────────────────────────
-fastapi>=0.110.0
-uvicorn[standard]>=0.29.0
-starlette>=0.36.0
-python-multipart>=0.0.9
+# ── Web Framework ─────────────────────────────────────────────────────────────
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+starlette==0.41.3
+python-multipart==0.0.18
 
-# ── Data Validation ───────────────────────────────────────────
-pydantic>=2.6.0
-pydantic-settings>=2.2.0
+# ── Data Validation ───────────────────────────────────────────────────────────
+pydantic==2.10.4
+pydantic-settings==2.7.0
 
-# ── Database ──────────────────────────────────────────────────
-sqlalchemy>=2.0.0
-alembic>=1.13.0
-psycopg2-binary>=2.9.0
+# ── Database ──────────────────────────────────────────────────────────────────
+sqlalchemy==2.0.36
+alembic==1.14.0
+psycopg2-binary==2.9.10
 
-# ── AI / HuggingFace ──────────────────────────────────────────
-huggingface-hub>=0.22.0
+# ── AI / HuggingFace (primary engine) ────────────────────────────────────────
+huggingface-hub==0.27.0
 
-# ── Security ──────────────────────────────────────────────────
-python-jose[cryptography]>=3.3.0
-passlib[bcrypt]>=1.7.4
+# ── Multi-Provider AI Callers ─────────────────────────────────────────────────
+# Required by core/caller.py — these were missing entirely
+google-generativeai==0.8.3        # _call_gemini
+openai==1.58.1                    # _call_openai + _call_grok (OpenAI-compatible)
 
-# ── HTTP / Ingestion ──────────────────────────────────────────
-requests>=2.31.0
-httpx>=0.27.0
-PyPDF2>=3.0.0
+# ── Security ──────────────────────────────────────────────────────────────────
+python-jose[cryptography]==3.3.0  # JWT — used by the new jwt_handler.py
+passlib[bcrypt]==1.7.4            # password hashing
 
-# ── Config / Utils ────────────────────────────────────────────
-python-dotenv>=1.0.0
-pyyaml>=6.0.0
+# ── HTTP / Ingestion ──────────────────────────────────────────────────────────
+requests==2.32.3
+httpx==0.28.1
+PyPDF2==3.0.1
 
-# ── TTS — Text to Speech ──────────────────────────────────────
-gtts>=2.5.0
+# ── Config / Utils ────────────────────────────────────────────────────────────
+python-dotenv==1.0.1
+pyyaml==6.0.2
+
+# ── Task Queue ────────────────────────────────────────────────────────────────
+celery==5.4.0
+redis==5.2.1     # used by both Celery broker AND the new Redis rate limiter
+
+# ── TTS — Text to Speech ──────────────────────────────────────────────────────
+gtts==2.5.4
 # pyttsx3>=2.90       # offline TTS — no audio hardware on Railway, skip
 # pygame>=2.5.0       # audio playback — not available on Railway, skip
 
-# ── STT — Speech to Text ──────────────────────────────────────
-# openai-whisper>=20231117  # ~1GB model + ffmpeg — enable only if needed
+# ── STT — Speech to Text ──────────────────────────────────────────────────────
+# openai-whisper>=20231117  # ~1GB model + ffmpeg — enable only locally if needed
 
-# ── Vector Store / Semantic Search ────────────────────────────
-# chromadb>=0.4.0     # ~200MB — uncomment if you want semantic search
+# ── Vector Store / Semantic Search ────────────────────────────────────────────
+# Required by core/knowledge_graph.py — was previously commented out
+chromadb==0.6.3
 
-# ── Task Queue ────────────────────────────────────────────────
-celery>=5.3.0
-redis>=5.0.0
+# =============================================================================
+# TRAINING DEPENDENCIES
+# Previously completely missing — Celery worker crashed on any training task
+#
+# These are large packages (~3GB with CUDA). For Railway API-only deployments
+# without GPU, you may want to move these to a separate requirements-train.txt
+# and install only on your training worker image.
+# =============================================================================
+torch==2.5.1
+transformers==4.47.1
+peft==0.14.0
+trl==0.13.0
+datasets==3.2.0
+bitsandbytes==0.45.0
+accelerate==1.2.1
