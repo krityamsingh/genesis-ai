@@ -1,4 +1,9 @@
 # config/base.yaml — GENESIS base configuration
+#
+# Fix: port corrected from 8000 → 8080 to match Dockerfile EXPOSE and
+# Railway deployment. Having 8000 here while Dockerfile defaults to 8080
+# caused silent healthcheck failures on Railway.
+
 app:
   name: "GENESIS"
   version: "1.0.0"
@@ -6,7 +11,7 @@ app:
 
 api:
   host: "0.0.0.0"
-  port: 8000
+  port: 8080          # was 8000 — now matches Dockerfile and railway.toml
   prefix: "/api/v1"
   cors_origins:
     - "http://localhost:3000"
@@ -31,12 +36,21 @@ security:
 
 logging:
   level: "INFO"
-  file: ""
+  file: ""                  # empty = stdout only (correct for Railway)
 
 modules:
+  # m1 is always enabled — it is the core learning module
   m1: {enabled: true}
+  # m2-m6 are disabled by default. Enable individually once you have
+  # reviewed the module's capabilities and resource requirements.
+  # m2 (web scraper): enable when ingestion pipeline is configured
   m2: {enabled: false}
+  # m3 (code analysis): enable for developer-focused deployments
   m3: {enabled: false}
+  # m4 (time reconstruction): enable for historical analysis features
   m4: {enabled: false}
+  # m5 (intuition engine): enable for cross-module reasoning
   m5: {enabled: false}
+  # m6 (reality sim / code synthesizer): enable with caution —
+  # executes synthesized code; ensure proper sandboxing before enabling
   m6: {enabled: false}
