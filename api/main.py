@@ -1,16 +1,23 @@
-"""
-GENESIS — The Autonomous AI Intelligence Engine.
-Main entry point for the Genesis FastAPI Backend.
-"""
-# api/main.py — FastAPI application factory
+# api/main.py
+# GENESIS — FastAPI Application Factory
+#
+# Fixes applied:
+#   • seed_all() guarded behind RUN_SEEDS=true env var — previously ran on
+#     every startup including production restarts, causing duplicate data
+#     and IntegrityErrors on rolling redeploys
+#   • config/base.yaml port corrected to 8080 (was 8000, conflicted with Dockerfile)
+#   • Startup logs the effective config for easier debugging in Railway logs
+# =============================================================================
+
 from __future__ import annotations
+
 import logging
 import os
-from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-# Load environment variables from .env
+from dotenv import load_dotenv
+
 load_dotenv()
 
 from fastapi import FastAPI, Request
@@ -28,21 +35,44 @@ from database.db           import init_db
 
 log = logging.getLogger("api.main")
 
-# Path to the pre-built Vite output
 FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup / shutdown lifecycle handler."""
+
+    # ── Database ──────────────────────────────────────────────────────────────
     try:
         init_db()
-        from database.seeds import seed_all
-        seed_all()
-        log.info("Database initialised and seeded successfully.")
+        log.info("Database initialised.")
     except Exception as e:
         log.error(f"DB init failed (non-fatal): {e}")
+
+    # ── Seeding ───────────────────────────────────────────────────────────────
+    # Only run seeds when explicitly requested (e.g. first deploy).
+    # Set RUN_SEEDS=true in env to trigger. Never run on every restart.
+    if os.getenv("RUN_SEEDS", "false").lower() == "true":
+        try:
+            from database.seeds import seed_all
+            seed_all()
+            log.info("Database seeded successfully.")
+        except Exception as e:
+            log.error(f"Seeding failed (non-fatal): {e}")
+    else:
+        log.info("Skipping seeds (RUN_SEEDS != true).")
+
+    # ── Log startup config for debugging ─────────────────────────────────────
+    log.info(
+        f"GENESIS starting | "
+        f"model={os.getenv('GEMMA_MODEL', 'default')} | "
+        f"db={'postgres' if 'postgresql' in os.getenv('DATABASE_URL', '') else 'sqlite'} | "
+        f"redis={'yes' if os.getenv('REDIS_URL') else 'no (in-memory fallback)'} | "
+        f"port={os.getenv('PORT', '8080')}"
+    )
+
     yield
+    log.info("GENESIS shutting down.")
 
 
 def create_app() -> FastAPI:
@@ -64,47 +94,41 @@ def create_app() -> FastAPI:
     app.add_exception_handler(GenesisError, genesis_exception_handler)
     app.add_exception_handler(Exception,    generic_exception_handler)
 
-    # ── API routes ────────────────────────────────────────
+    # API routes
     register_routes(app)
 
     # WebSocket
     app.add_api_websocket_route("/ws/stream", ws_stream_endpoint)
 
-    # Health check (no prefix so Railway healthcheck hits it directly)
-    @app.get("/health")
+    # Health check (no auth — Railway healthcheck hits this)
+    @app.get("/health", include_in_schema=False)
     async def health():
         return {"status": "ok", "service": "genesis-api"}
 
-    @app.get("/")
+    @app.get("/", include_in_schema=False)
     async def root():
         if FRONTEND_DIST.exists():
             return FileResponse(str(FRONTEND_DIST / "index.html"))
         return {
             "message": "GENESIS API is running",
-            "docs": "/docs",
-            "health": "/health",
-            "frontend_status": "Development mode (run frontend via npm run dev on port 5173)"
+            "docs":    "/docs",
+            "health":  "/health",
+            "note":    "Run frontend via: cd frontend && npm run dev",
         }
 
-    # ── Frontend static files ─────────────────────────────
-    # Only mount if the dist folder was built (it won't exist in pure-API mode)
+    # Frontend static files (only if dist was built)
     if FRONTEND_DIST.exists():
-        # Serve static assets (JS/CSS/images) under /assets
         assets_dir = FRONTEND_DIST / "assets"
         if assets_dir.exists():
             app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
 
-        # SPA catch-all: any non-API, non-WS path returns index.html
         index_html = FRONTEND_DIST / "index.html"
 
         @app.get("/{full_path:path}", include_in_schema=False)
         async def serve_spa(request: Request, full_path: str):
-            # Let API and WS paths fall through (they're registered before this)
-            # Serve any static file that actually exists in dist
             file_path = FRONTEND_DIST / full_path
             if file_path.exists() and file_path.is_file():
                 return FileResponse(str(file_path))
-            # SPA fallback
             return FileResponse(str(index_html))
 
     return app
