@@ -1,4 +1,6 @@
-// frontend/src/routes/index.jsx
+// frontend/src/routes/routes_index.jsx
+// NOTE: This is an alternative router file. The canonical one is routes/index.jsx.
+// Kept for compatibility but points to the same fixed page paths.
 import React, { lazy, Suspense } from 'react'
 import { createBrowserRouter } from 'react-router-dom'
 import PrivateRoute  from './PrivateRoute'
@@ -7,12 +9,12 @@ import NotFound      from '../components/NotFound'
 
 // FIX: All lazy imports corrected to ../pages/<file> with proper casing
 const App        = lazy(() => import('../App'))
-const Login      = lazy(() => import('../pages/login'))         // FIX: was ../Login
-const Dashboard  = lazy(() => import('../pages/Dashboard'))     // FIX: was ../Dashboard
-const ModulePanel= lazy(() => import('../pages/Modules'))       // FIX: was ../ModulePanel (component doesn't exist as page)
-const KnowledgeG = lazy(() => import('../pages/Knowledge'))     // FIX: was ../KnowledgeGraph
-const Timeline   = lazy(() => import('../pages/Timeline'))      // FIX: was ../Timeline
-const VoiceInput = lazy(() => import('../pages/Voice'))         // FIX: was ../VoiceInput
+const Login      = lazy(() => import('../pages/login'))
+const Dashboard  = lazy(() => import('../pages/Dashboard'))
+const ModulePanel= lazy(() => import('../pages/Modules'))
+const KnowledgeG = lazy(() => import('../pages/Knowledge'))
+const Timeline   = lazy(() => import('../pages/Timeline'))
+const VoiceInput = lazy(() => import('../pages/Voice'))
 
 const wrap = (el) => <Suspense fallback={<Loader />}>{el}</Suspense>
 
