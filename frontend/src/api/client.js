@@ -1,101 +1,99 @@
-// frontend/src/api/client.js
-// GENESIS — Axios HTTP Client
-//
-// Fixes applied:
-//   • Token read from sessionStorage instead of localStorage (XSS mitigation)
-//   • 429 responses handled: shows retry-after delay instead of redirect
-//   • Request interceptor pulls fresh token on every request (store may have
-//     refreshed the token since the instance was created)
-//   • Response interceptor fires tryRefresh() on 401 before hard-redirecting,
-//     giving the refresh flow one chance to recover the session silently
-
 import axios from 'axios'
 
-const client = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api/v1',
-  timeout: 60_000,
+// ── Axios instance ────────────────────────────────────────────────────────────
+const api = axios.create({
+  baseURL: '/api/v1',
+  timeout: 30_000,
+  headers: { 'Content-Type': 'application/json' },
 })
 
-// ── Request interceptor: attach fresh token on every call ────────────────────
-client.interceptors.request.use((config) => {
-  // Always read from sessionStorage so we pick up refreshed tokens
-  const token = sessionStorage.getItem('genesis_token')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  return config
+// Attach JWT on every request
+api.interceptors.request.use(cfg => {
+  const token = localStorage.getItem('genesis_token')
+  if (token) cfg.headers.Authorization = `Bearer ${token}`
+  return cfg
 })
 
-// ── Response interceptor: handle 401 and 429 globally ────────────────────────
-let _refreshing = false
-let _refreshQueue = []   // callbacks waiting for the refresh to complete
-
-const processQueue = (error, token = null) => {
-  _refreshQueue.forEach(({ resolve, reject }) =>
-    error ? reject(error) : resolve(token)
-  )
-  _refreshQueue = []
-}
-
-client.interceptors.response.use(
-  (res) => res,
-  async (err) => {
-    const originalRequest = err.config
-
-    // ── 401: try token refresh before redirecting to /login ──────────────────
-    if (err.response?.status === 401 && !originalRequest._retried) {
-      originalRequest._retried = true
-
-      if (_refreshing) {
-        // Queue this request until the ongoing refresh completes
-        return new Promise((resolve, reject) => {
-          _refreshQueue.push({ resolve, reject })
-        }).then((token) => {
-          originalRequest.headers.Authorization = `Bearer ${token}`
-          return client(originalRequest)
-        })
-      }
-
-      _refreshing = true
-
-      const refreshToken = sessionStorage.getItem('genesis_refresh_token')
-      if (refreshToken) {
-        try {
-          const { data } = await axios.post(
-            `${client.defaults.baseURL}/auth/refresh`,
-            { refresh_token: refreshToken },
-          )
-          const newToken = data.access_token
-          sessionStorage.setItem('genesis_token', newToken)
-          processQueue(null, newToken)
-          _refreshing = false
-
-          originalRequest.headers.Authorization = `Bearer ${newToken}`
-          return client(originalRequest)
-        } catch (refreshErr) {
-          processQueue(refreshErr, null)
-          _refreshing = false
-        }
-      } else {
-        _refreshing = false
-      }
-
-      // Refresh failed or no refresh token — clear session and redirect
-      sessionStorage.removeItem('genesis_token')
-      sessionStorage.removeItem('genesis_refresh_token')
+// Global 401 handler
+api.interceptors.response.use(
+  res => res,
+  err => {
+    if (err.response?.status === 401) {
+      localStorage.removeItem('genesis_token')
       window.location.href = '/login'
-      return Promise.reject(err)
     }
-
-    // ── 429: surface retry-after info instead of silently failing ────────────
-    if (err.response?.status === 429) {
-      const retryAfter = err.response.headers['retry-after'] || '60'
-      const msg = `Rate limit exceeded. Please wait ${retryAfter} seconds.`
-      return Promise.reject(new Error(msg))
-    }
-
     return Promise.reject(err)
   }
 )
 
-export default client
+export default api
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+export const authAPI = {
+  login:   (username, password) => api.post('/auth/login',  { username, password }),
+  refresh: ()                   => api.post('/auth/refresh'),
+  logout:  ()                   => api.post('/auth/logout'),
+  me:      ()                   => api.get ('/auth/me'),
+}
+
+// ── Core ──────────────────────────────────────────────────────────────────────
+export const coreAPI = {
+  /** Ingest a source (URL, PDF path, raw text) into the knowledge graph */
+  learn:         (source, source_type = 'url') => api.post('/core/learn', { source, source_type }),
+
+  /** Ask a question (non-streaming) */
+  ask:           (query, module_hint = null)   => api.post('/core/query', { query, module_hint }),
+
+  /** Auto-route a complex query to the best module */
+  route:         (query)                       => api.post('/core/route', { query }),
+
+  /** Stats for the dashboard */
+  stats:         ()                            => api.get ('/core/stats'),
+
+  /** Export training dataset */
+  exportDataset: ()                            => api.post('/core/export-dataset'),
+
+  /** Summarise knowledge graph */
+  summarise:     ()                            => api.get ('/core/summarise'),
+}
+
+// ── Modules ───────────────────────────────────────────────────────────────────
+export const moduleAPI = {
+  list:          ()          => api.get  ('/modules'),
+  toggle:        (id, state) => api.patch(`/modules/${id}`, { enabled: state }),
+  info:          (id)        => api.get  (`/modules/${id}`),
+}
+
+// ── Knowledge Graph ───────────────────────────────────────────────────────────
+export const kgAPI = {
+  nodes:         ()      => api.get('/core/kg/nodes'),
+  query:         (q)     => api.post('/core/kg/query', { query: q }),
+  nodeInfo:      (id)    => api.get(`/core/kg/node/${id}`),
+}
+
+// ── Admin ─────────────────────────────────────────────────────────────────────
+export const adminAPI = {
+  health:        ()             => api.get  ('/admin/health'),
+  users:         ()             => api.get  ('/admin/users'),
+  createUser:    (data)         => api.post ('/admin/users', data),
+  deleteUser:    (id)           => api.delete(`/admin/users/${id}`),
+  logs:          (lines = 100)  => api.get  (`/admin/logs?lines=${lines}`),
+  trainStatus:   ()             => api.get  ('/admin/training/status'),
+  startTraining: (cfg)          => api.post ('/admin/training/start', cfg),
+  backup:        ()             => api.post ('/admin/backup'),
+  listBackups:   ()             => api.get  ('/admin/backups'),
+  prompts:       ()             => api.get  ('/admin/prompts'),
+  savePrompt:    (id, body)     => api.put  (`/admin/prompts/${id}`, body),
+}
+
+// ── Voice ─────────────────────────────────────────────────────────────────────
+export const voiceAPI = {
+  /** Send audio blob, get transcript */
+  transcribe: (audioBlob) => {
+    const fd = new FormData()
+    fd.append('file', audioBlob, 'recording.webm')
+    return api.post('/voice/transcribe', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+  },
+  /** Get TTS audio URL */
+  speak: (text, lang = 'en') => api.post('/voice/speak', { text, lang }, { responseType: 'blob' }),
+}
