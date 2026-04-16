@@ -1,147 +1,144 @@
-// frontend/src/store/genesisStore.js
-// GENESIS — Global App State (Zustand)
-//
-// Fixes applied:
-//   • Token storage moved from localStorage → sessionStorage
-//     localStorage persists indefinitely and is accessible to any JS on the
-//     page — XSS anywhere = permanent session theft.
-//     sessionStorage tokens die when the tab closes, limiting the attack window.
-//   • Added refreshToken storage + auto-refresh logic
-//   • Added /me call on store init so the app validates the stored token
-//     against the server on every page load (catches expired/revoked tokens)
-//   • learnError now cleared on next learn() call (was already done, kept)
-//   • Added 401 handling in ask() so expired mid-session tokens auto-logout
-
 import { create } from 'zustand'
-import * as api from '../api/endpoints'
+import { persist } from 'zustand/middleware'
+import { authAPI, coreAPI, moduleAPI, adminAPI } from '../api/client'
 
-// ── Storage helpers (sessionStorage instead of localStorage) ─────────────────
-// Change these two functions to switch storage strategy project-wide.
+const useGenesisStore = create(
+  persist(
+    (set, get) => ({
 
-const storage = {
-  get: (key) => sessionStorage.getItem(key),
-  set: (key, val) => sessionStorage.setItem(key, val),
-  del: (key) => sessionStorage.removeItem(key),
-}
+      // ── Auth ────────────────────────────────────────────────────────────────
+      token:    null,
+      user:     null,
+      authed:   false,
 
-const TOKEN_KEY   = 'genesis_token'
-const REFRESH_KEY = 'genesis_refresh_token'
+      login: async (username, password) => {
+        const res = await authAPI.login(username, password)
+        const { access_token, user } = res.data
+        localStorage.setItem('genesis_token', access_token)
+        set({ token: access_token, user, authed: true })
+        return res.data
+      },
 
+      logout: () => {
+        localStorage.removeItem('genesis_token')
+        set({ token: null, user: null, authed: false, messages: [], stats: null })
+      },
 
-// ── Store ─────────────────────────────────────────────────────────────────────
+      // ── Stats ───────────────────────────────────────────────────────────────
+      stats:         null,
+      statsLoading:  false,
 
-const useGenesisStore = create((set, get) => ({
+      fetchStats: async () => {
+        if (get().statsLoading) return
+        set({ statsLoading: true })
+        try {
+          const res = await coreAPI.stats()
+          set({ stats: res.data })
+        } catch { /* silent fail */ }
+        finally { set({ statsLoading: false }) }
+      },
 
-  // ── Auth ──────────────────────────────────────────────────────────────────
-  token:    storage.get(TOKEN_KEY)   || null,
-  isAuthed: !!storage.get(TOKEN_KEY),
-  user:     null,   // { user_id, username, email, is_admin }
+      // ── Learn ───────────────────────────────────────────────────────────────
+      learnLoading: false,
+      learnResult:  null,
 
-  setToken: (token, refreshToken = null) => {
-    storage.set(TOKEN_KEY, token)
-    if (refreshToken) storage.set(REFRESH_KEY, refreshToken)
-    set({ token, isAuthed: true })
-  },
-
-  logout: () => {
-    storage.del(TOKEN_KEY)
-    storage.del(REFRESH_KEY)
-    set({ token: null, isAuthed: false, user: null, messages: [], stats: null })
-  },
-
-  // Validate stored token against server on app boot
-  validateToken: async () => {
-    const token = storage.get(TOKEN_KEY)
-    if (!token) return
-
-    try {
-      const { data } = await api.getMe()
-      set({ user: data, isAuthed: true })
-    } catch (err) {
-      // Token is invalid or expired — try refresh before logging out
-      if (err.response?.status === 401) {
-        const refreshed = await get().tryRefresh()
-        if (!refreshed) get().logout()
-      }
-    }
-  },
-
-  // Attempt to get a new access token using the stored refresh token
-  tryRefresh: async () => {
-    const refreshToken = storage.get(REFRESH_KEY)
-    if (!refreshToken) return false
-    try {
-      const { data } = await api.refreshToken(refreshToken)
-      storage.set(TOKEN_KEY, data.access_token)
-      set({ token: data.access_token, isAuthed: true })
-      return true
-    } catch {
-      return false
-    }
-  },
-
-  // ── Stats ──────────────────────────────────────────────────────────────────
-  stats:      null,
-  statsError: null,
-  fetchStats: async () => {
-    try {
-      const { data } = await api.getStats()
-      set({ stats: data, statsError: null })
-    } catch (e) {
-      set({ statsError: e.message })
-      console.error('fetchStats:', e)
-    }
-  },
-
-  // ── Learning ───────────────────────────────────────────────────────────────
-  learnResult:  null,
-  learnLoading: false,
-  learnError:   null,
-  learn: async (source) => {
-    set({ learnLoading: true, learnError: null, learnResult: null })
-    try {
-      const { data } = await api.learn(source)
-      set({ learnResult: data, learnLoading: false })
-      return data
-    } catch (e) {
-      const msg = e.response?.data?.detail || e.message
-      set({ learnError: msg, learnLoading: false })
-    }
-  },
-
-  // ── Chat ───────────────────────────────────────────────────────────────────
-  messages: [],
-
-  addMessage: (role, content) =>
-    set((s) => ({
-      messages: [...s.messages, { role, content, ts: Date.now() }],
-    })),
-
-  clearMessages: () => set({ messages: [] }),
-
-  ask: async (query) => {
-    get().addMessage('user', query)
-    try {
-      const { data } = await api.ask(query)
-      get().addMessage('assistant', data.result)
-      return data.result
-    } catch (e) {
-      const status = e.response?.status
-      if (status === 401) {
-        // Token expired mid-session — try refresh once, then logout
-        const refreshed = await get().tryRefresh()
-        if (refreshed) {
-          return get().ask(query)   // retry once with new token
+      learn: async (source, source_type = 'url') => {
+        set({ learnLoading: true, learnResult: null })
+        try {
+          const res = await coreAPI.learn(source, source_type)
+          set({ learnResult: res.data })
+          return res.data
+        } catch (e) {
+          set({ learnResult: { error: e.response?.data?.detail || 'Learn failed' } })
+        } finally {
+          set({ learnLoading: false })
         }
-        get().logout()
-        window.location.href = '/login'
-        return
-      }
-      const msg = e.response?.data?.detail || e.message || 'Request failed'
-      get().addMessage('assistant', `Error: ${msg}`)
-    }
-  },
+      },
 
-}))
+      // ── Chat ────────────────────────────────────────────────────────────────
+      messages:    [{ role: 'system', content: 'GENESIS online  ↗  Gemma 3 27B loaded · KG ready · 3 modules active', ts: Date.now() }],
+      streamText:  '',
+      streaming:   false,
+      chatModule:  'auto',
+
+      setChatModule: (m)     => set({ chatModule: m }),
+      clearMessages: ()      => set({ messages: [{ role: 'system', content: 'Session cleared.', ts: Date.now() }] }),
+      addMessage:    (msg)   => set(s => ({ messages: [...s.messages, { ...msg, ts: Date.now() }] })),
+      setStreamText: (text)  => set({ streamText: text }),
+      setStreaming:  (bool)  => set({ streaming: bool }),
+
+      // ── Modules ─────────────────────────────────────────────────────────────
+      modules:        [],
+      modulesLoading: false,
+
+      fetchModules: async () => {
+        set({ modulesLoading: true })
+        try {
+          const res = await moduleAPI.list()
+          set({ modules: res.data })
+        } catch { /* silent */ }
+        finally { set({ modulesLoading: false }) }
+      },
+
+      toggleModule: async (id, enabled) => {
+        // Optimistic update
+        set(s => ({
+          modules: s.modules.map(m => m.id === id ? { ...m, enabled } : m)
+        }))
+        try {
+          await moduleAPI.toggle(id, enabled)
+        } catch {
+          // Revert on error
+          set(s => ({
+            modules: s.modules.map(m => m.id === id ? { ...m, enabled: !enabled } : m)
+          }))
+        }
+      },
+
+      // ── Knowledge Graph ──────────────────────────────────────────────────────
+      kgData:     { nodes: [], links: [] },
+      kgLoading:  false,
+      kgMessages: [],
+
+      fetchKG: async () => {
+        set({ kgLoading: true })
+        try {
+          const res = await coreAPI.summarise()
+          set({ kgData: res.data })
+        } catch { /* silent */ }
+        finally { set({ kgLoading: false }) }
+      },
+
+      addKGMessage: (msg) => set(s => ({ kgMessages: [...s.kgMessages, msg] })),
+      clearKGMessages: () => set({ kgMessages: [] }),
+
+      // ── Admin ────────────────────────────────────────────────────────────────
+      adminHealth:   null,
+      adminUsers:    [],
+      adminLogs:     [],
+      adminTraining: null,
+
+      fetchHealth:   async () => { try { const r = await adminAPI.health();    set({ adminHealth:   r.data }) } catch {} },
+      fetchUsers:    async () => { try { const r = await adminAPI.users();     set({ adminUsers:    r.data }) } catch {} },
+      fetchLogs:     async () => { try { const r = await adminAPI.logs(150);   set({ adminLogs:     r.data }) } catch {} },
+      fetchTraining: async () => { try { const r = await adminAPI.trainStatus();set({ adminTraining: r.data }) } catch {} },
+
+      // ── Voice ────────────────────────────────────────────────────────────────
+      transcript:  '',
+      recording:   false,
+      setTranscript: (t)    => set({ transcript: t }),
+      setRecording:  (bool) => set({ recording: bool }),
+
+      // ── UI ────────────────────────────────────────────────────────────────────
+      cmdOpen:  false,
+      openCmd:  () => set({ cmdOpen: true }),
+      closeCmd: () => set({ cmdOpen: false }),
+    }),
+    {
+      name:    'genesis-store',
+      partialize: s => ({ token: s.token, user: s.user, authed: s.authed, messages: s.messages }),
+    }
+  )
+)
 
 export default useGenesisStore
