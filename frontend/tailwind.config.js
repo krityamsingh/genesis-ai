@@ -3,14 +3,53 @@ export default {
   content: ['./index.html', './src/**/*.{js,jsx,ts,tsx}'],
   theme: {
     extend: {
+      fontFamily: {
+        mono:    ['"IBM Plex Mono"', 'monospace'],
+        display: ['"Space Mono"', 'monospace'],
+      },
       colors: {
-        genesis: {
-          50:  '#f0f4ff',
-          500: '#4f6ef7',
-          900: '#1a1f3c'
-        }
-      }
-    }
+        g: {
+          bg0:  '#06060A',
+          bg1:  '#0C0C12',
+          bg2:  '#111119',
+          bg3:  '#17171F',
+          b0:   '#1C1C28',
+          b1:   '#252538',
+          b2:   '#313148',
+          t0:   '#EEEEF8',
+          t1:   '#8888A8',
+          t2:   '#3A3A55',
+          acc:  '#F59E0B',
+          accl: '#FBBF24',
+          accd: '#B45309',
+          gr:   '#10B981',
+          rd:   '#F43F5E',
+          bl:   '#60A5FA',
+          pu:   '#8B5CF6',
+          or:   '#F97316',
+          pi:   '#EC4899',
+        },
+      },
+      keyframes: {
+        fadein:  { from: { opacity: '0', transform: 'translateY(6px)' }, to: { opacity: '1', transform: 'translateY(0)' } },
+        blink:   { '0%,100%': { opacity: '1' }, '50%': { opacity: '0' } },
+        pulse2:  { '0%,100%': { opacity: '1' }, '50%': { opacity: '.2' } },
+        spin1:   { to: { transform: 'rotate(360deg)' } },
+        glow:    { '0%,100%': { boxShadow: '0 0 12px rgba(245,158,11,.15)' }, '50%': { boxShadow: '0 0 28px rgba(245,158,11,.35)' } },
+        slideup: { from: { opacity: '0', transform: 'translateY(14px)' }, to: { opacity: '1', transform: 'translateY(0)' } },
+        wave:    { '0%,100%': { transform: 'scaleY(.15)' }, '50%': { transform: 'scaleY(1)' } },
+        scanline:{ '0%': { transform: 'translateY(-100%)' }, '100%': { transform: 'translateY(600px)' } },
+      },
+      animation: {
+        fadein:  'fadein .22s ease both',
+        blink:   'blink .8s step-end infinite',
+        pulse2:  'pulse2 2s ease-in-out infinite',
+        spin1:   'spin1 .8s linear infinite',
+        glow:    'glow 2.5s ease-in-out infinite',
+        slideup: 'slideup .18s ease',
+        scanline:'scanline 3s linear infinite',
+      },
+    },
   },
-  plugins: []
+  plugins: [],
 }
