@@ -1,5 +1,7 @@
+// FIX: CartesianGrid was imported at line 300 (mid-file) — illegal in ESM.
+// Moved to the top with all other recharts imports.
 import { useState, useEffect, useCallback } from 'react'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import useGenesisStore from '../store/genesisStore'
 import { adminAPI }    from '../api/client'
 import Badge     from '../components/Badge'
@@ -16,10 +18,10 @@ const STATIC_HEALTH = [
   { label:'Postgres',    val:'8 ms',   sub:'query avg',   color:'#10B981', icon:'🗄' },
 ]
 const STATIC_USERS = [
-  { id:1, username:'admin',        email:'admin@genesis.local',   role:'admin',      status:'active', last_seen:'now'  },
-  { id:2, username:'researcher_01',email:'r1@genesis.local',      role:'researcher', status:'active', last_seen:'2m'   },
-  { id:3, username:'dev_aditya',   email:'aditya@genesis.local',  role:'developer',  status:'idle',   last_seen:'14m'  },
-  { id:4, username:'bot_ingest',   email:'ingest@genesis.local',  role:'service',    status:'active', last_seen:'1s'   },
+  { id:1, username:'admin',         email:'admin@genesis.local',  role:'admin',      status:'active', last_seen:'now' },
+  { id:2, username:'researcher_01', email:'r1@genesis.local',     role:'researcher', status:'active', last_seen:'2m'  },
+  { id:3, username:'dev_aditya',    email:'aditya@genesis.local', role:'developer',  status:'idle',   last_seen:'14m' },
+  { id:4, username:'bot_ingest',    email:'ingest@genesis.local', role:'service',    status:'active', last_seen:'1s'  },
 ]
 const STATIC_LOGS = [
   { level:'INFO',    msg:'api.main — GENESIS ready | model=gemma-3-27b | db=postgres | redis=yes | port=8080' },
@@ -70,7 +72,6 @@ function HealthPanel({ data }) {
         ))}
       </div>
 
-      {/* System info row */}
       <div className="g-card" style={{ padding: 13, display: 'flex', gap: 24, fontSize: 11, flexWrap: 'wrap' }}>
         {[
           { l:'Model',   v:'gemma-3-27b-it' },
@@ -105,7 +106,6 @@ function UsersPanel({ users }) {
 
   return (
     <div className="animate-fadein" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {/* Table */}
       <div className="g-card" style={{ overflow: 'hidden' }}>
         <div style={{
           display: 'grid', gridTemplateColumns: '1fr 1.5fr 100px 90px 60px',
@@ -120,8 +120,7 @@ function UsersPanel({ users }) {
             style={{
               display: 'grid', gridTemplateColumns: '1fr 1.5fr 100px 90px 60px',
               padding: '10px 14px', borderBottom: '1px solid var(--b0)',
-              fontSize: 11, color: 'var(--t0)', cursor: 'default',
-              transition: 'background .1s',
+              fontSize: 11, color: 'var(--t0)', cursor: 'default', transition: 'background .1s',
             }}
             onMouseEnter={e => e.currentTarget.style.background = 'var(--bg2)'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
@@ -138,51 +137,37 @@ function UsersPanel({ users }) {
               </div>
               {u.username}
             </span>
-            <span style={{ color: 'var(--t2)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {u.email}
-            </span>
-            <span>
-              <Badge text={u.role} color={ROLE_COLOR[u.role] || 'var(--acc)'} small />
-            </span>
+            <span style={{ color: 'var(--t2)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.email}</span>
+            <span><Badge text={u.role} color={ROLE_COLOR[u.role] || 'var(--acc)'} small /></span>
             <span style={{ display:'flex', alignItems:'center', gap:5 }}>
               <StatusDot color={u.status === 'active' ? '#10B981' : 'var(--b2)'} pulse={u.status === 'active'} size={5} />
-              <span style={{ fontSize:10, color: u.status === 'active' ? '#10B981' : 'var(--t2)' }}>
-                {u.status}
-              </span>
+              <span style={{ fontSize:10, color: u.status === 'active' ? '#10B981' : 'var(--t2)' }}>{u.status}</span>
             </span>
             <span style={{ fontSize: 10, color: 'var(--t2)' }}>{u.last_seen}</span>
           </div>
         ))}
       </div>
 
-      {/* Create user */}
       {creating ? (
         <div className="g-card animate-fadein" style={{ padding: 14 }}>
           <div className="g-label" style={{ marginBottom: 10 }}>CREATE USER</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
             {[
-              { k:'username', p:'username', label:'USERNAME' },
-              { k:'email',    p:'user@example.com', label:'EMAIL' },
-              { k:'password', p:'password', label:'PASSWORD' },
+              { k:'username', p:'username',         label:'USERNAME' },
+              { k:'email',    p:'user@example.com', label:'EMAIL'    },
+              { k:'password', p:'password',         label:'PASSWORD' },
             ].map(({ k, p, label }) => (
               <div key={k}>
                 <div className="g-label" style={{ marginBottom: 3 }}>{label}</div>
-                <input
-                  type={k === 'password' ? 'password' : 'text'}
-                  value={form[k]}
+                <input type={k === 'password' ? 'password' : 'text'} value={form[k]}
                   onChange={e => setForm(f => ({ ...f, [k]: e.target.value }))}
-                  placeholder={p}
-                  style={{ width: '100%', padding: '7px 9px', fontSize: 11 }}
-                />
+                  placeholder={p} style={{ width: '100%', padding: '7px 9px', fontSize: 11 }} />
               </div>
             ))}
             <div>
               <div className="g-label" style={{ marginBottom: 3 }}>ROLE</div>
-              <select
-                value={form.role}
-                onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
-                style={{ width: '100%', padding: '7px 9px', fontSize: 11 }}
-              >
+              <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
+                style={{ width: '100%', padding: '7px 9px', fontSize: 11 }}>
                 {['admin','researcher','developer','service'].map(r => <option key={r}>{r}</option>)}
               </select>
             </div>
@@ -209,37 +194,37 @@ function UsersPanel({ users }) {
 
 function TrainingPanel() {
   const [cfg, setCfg] = useState({
-    base_model:    'gemma-3-27b-it',
-    dataset:       'genesis_kg_v3.jsonl',
-    epochs:        '15',
-    lr:            '2e-4',
-    batch_size:    '4',
-    lora_rank:     '16',
-    lora_alpha:    '32',
-    max_seq_len:   '2048',
+    base_model:  'gemma-3-27b-it',
+    dataset:     'genesis_kg_v3.jsonl',
+    epochs:      '15',
+    lr:          '2e-4',
+    batch_size:  '4',
+    lora_rank:   '16',
+    lora_alpha:  '32',
+    max_seq_len: '2048',
   })
-  const [starting, setStarting] = useState(false)
+  const [starting,  setStarting]  = useState(false)
   const [jobStatus, setJobStatus] = useState(null)
 
   const startTrain = async () => {
     setStarting(true)
     try {
       await adminAPI.startTraining(cfg)
-      setJobStatus({ status:'queued', message:`Training job queued on worker-01 | epochs=${cfg.epochs}` })
+      setJobStatus({ message: `Training job queued on worker-01 | epochs=${cfg.epochs}` })
     } catch {
-      setJobStatus({ status:'queued', message:`Training job queued on worker-01 | epochs=${cfg.epochs}` })
+      setJobStatus({ message: `Training job queued on worker-01 | epochs=${cfg.epochs}` })
     } finally { setStarting(false) }
   }
 
   const FIELDS = [
-    { k:'base_model',  l:'BASE MODEL'   },
-    { k:'dataset',     l:'DATASET'      },
-    { k:'epochs',      l:'EPOCHS'       },
-    { k:'lr',          l:'LEARNING RATE'},
-    { k:'batch_size',  l:'BATCH SIZE'   },
-    { k:'lora_rank',   l:'LORA RANK'    },
-    { k:'lora_alpha',  l:'LORA ALPHA'   },
-    { k:'max_seq_len', l:'MAX SEQ LEN'  },
+    { k:'base_model',  l:'BASE MODEL'    },
+    { k:'dataset',     l:'DATASET'       },
+    { k:'epochs',      l:'EPOCHS'        },
+    { k:'lr',          l:'LEARNING RATE' },
+    { k:'batch_size',  l:'BATCH SIZE'    },
+    { k:'lora_rank',   l:'LORA RANK'     },
+    { k:'lora_alpha',  l:'LORA ALPHA'    },
+    { k:'max_seq_len', l:'MAX SEQ LEN'   },
   ]
 
   return (
@@ -274,7 +259,6 @@ function TrainingPanel() {
         )}
       </div>
 
-      {/* Loss curve */}
       <div className="g-card" style={{ padding:14 }}>
         <div className="g-label" style={{ marginBottom:10 }}>
           PREVIOUS RUN — LOSS CURVE ({LOSS_DATA.length} epochs)
@@ -282,7 +266,8 @@ function TrainingPanel() {
         <ResponsiveContainer width="100%" height={160}>
           <BarChart data={LOSS_DATA} margin={{ top:4, right:0, bottom:0, left:-20 }}>
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="epoch" tick={{ fontSize:9 }} label={{ value:'epoch', position:'insideBottom', offset:-2, fill:'var(--t2)', fontSize:9 }} />
+            <XAxis dataKey="epoch" tick={{ fontSize:9 }}
+              label={{ value:'epoch', position:'insideBottom', offset:-2, fill:'var(--t2)', fontSize:9 }} />
             <YAxis tick={{ fontSize:9 }} domain={[0,'auto']} />
             <Tooltip
               contentStyle={{ background:'var(--bg2)', border:'1px solid var(--b1)', borderRadius:6, fontSize:11 }}
@@ -295,9 +280,6 @@ function TrainingPanel() {
     </div>
   )
 }
-
-// Need CartesianGrid for BarChart
-import { CartesianGrid } from 'recharts'
 
 function LogsPanel({ logs }) {
   const [filter, setFilter] = useState('ALL')
@@ -313,25 +295,20 @@ function LogsPanel({ logs }) {
 
   return (
     <div className="animate-fadein" style={{ display:'flex', flexDirection:'column', gap:8 }}>
-      {/* Toolbar */}
       <div style={{ display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' }}>
         {['ALL','INFO','DEBUG','WARNING','ERROR'].map(f => (
-          <button key={f}
-            onClick={() => setFilter(f)}
-            style={{
-              padding:'2px 8px', fontSize:9, borderRadius:3,
-              background: filter===f ? `${LOG_COLOR[f]||'var(--acc)'}18` : 'transparent',
-              color:      filter===f ? (LOG_COLOR[f]||'var(--acc)') : 'var(--t2)',
-              border:     `1px solid ${filter===f ? (LOG_COLOR[f]||'var(--acc)')+'44' : 'var(--b0)'}`,
-              fontFamily:'"IBM Plex Mono",monospace', transition:'all .12s',
-            }}
-          >{f}</button>
+          <button key={f} onClick={() => setFilter(f)} style={{
+            padding:'2px 8px', fontSize:9, borderRadius:3,
+            background: filter===f ? `${LOG_COLOR[f]||'var(--acc)'}18` : 'transparent',
+            color:      filter===f ? (LOG_COLOR[f]||'var(--acc)') : 'var(--t2)',
+            border:     `1px solid ${filter===f ? (LOG_COLOR[f]||'var(--acc)')+'44' : 'var(--b0)'}`,
+            fontFamily:'"IBM Plex Mono",monospace', transition:'all .12s',
+          }}>{f}</button>
         ))}
         <input value={search} onChange={e => setSearch(e.target.value)}
           placeholder="grep..." style={{ padding:'3px 9px', fontSize:10, width:160, marginLeft:'auto' }} />
       </div>
 
-      {/* Log lines */}
       <div style={{
         background:'var(--bg0)', border:'1px solid var(--b0)', borderRadius:7,
         padding:'10px 12px', fontFamily:'"IBM Plex Mono",monospace',
@@ -340,8 +317,7 @@ function LogsPanel({ logs }) {
         {visible.map((l, i) => (
           <div key={i} className="log-line" style={{
             fontSize:10, padding:'2.5px 4px', lineHeight:1.7,
-            borderBottom:'1px solid rgba(255,255,255,.025)',
-            color:'var(--t2)',
+            borderBottom:'1px solid rgba(255,255,255,.025)', color:'var(--t2)',
           }}>
             <span style={{ color:'var(--t2)', userSelect:'none' }}>[{now}] </span>
             <span style={{ color: LOG_COLOR[l.level] || 'var(--t1)', minWidth:56, display:'inline-block' }}>
@@ -385,34 +361,24 @@ function PromptsPanel() {
 
   return (
     <div className="animate-fadein" style={{ display:'flex', gap:12 }}>
-      {/* Sidebar */}
       <div style={{ width:130, flexShrink:0 }}>
         {prompts.map(p => (
-          <button key={p.id} onClick={() => setSelected(p.id)}
-            style={{
-              width:'100%', textAlign:'left', padding:'8px 10px', borderRadius:5,
-              background: selected===p.id ? 'rgba(245,158,11,.1)' : 'transparent',
-              border:`1px solid ${selected===p.id ? 'rgba(245,158,11,.3)' : 'transparent'}`,
-              color: selected===p.id ? 'var(--acc)' : 'var(--t1)',
-              fontFamily:'"IBM Plex Mono",monospace', fontSize:11,
-              marginBottom:3, transition:'all .12s',
-            }}>
+          <button key={p.id} onClick={() => setSelected(p.id)} style={{
+            width:'100%', textAlign:'left', padding:'8px 10px', borderRadius:5,
+            background: selected===p.id ? 'rgba(245,158,11,.1)' : 'transparent',
+            border:`1px solid ${selected===p.id ? 'rgba(245,158,11,.3)' : 'transparent'}`,
+            color: selected===p.id ? 'var(--acc)' : 'var(--t1)',
+            fontFamily:'"IBM Plex Mono",monospace', fontSize:11, marginBottom:3, transition:'all .12s',
+          }}>
             {p.label}
           </button>
         ))}
       </div>
 
-      {/* Editor */}
       <div style={{ flex:1 }}>
-        <div className="g-label" style={{ marginBottom:6 }}>
-          prompts/{cur?.id}.txt
-        </div>
-        <textarea
-          value={cur?.body || ''}
-          onChange={e => updateBody(e.target.value)}
-          rows={14}
-          style={{ width:'100%', padding:'10px 12px', fontSize:11, lineHeight:1.6, resize:'vertical' }}
-        />
+        <div className="g-label" style={{ marginBottom:6 }}>prompts/{cur?.id}.txt</div>
+        <textarea value={cur?.body || ''} onChange={e => updateBody(e.target.value)} rows={14}
+          style={{ width:'100%', padding:'10px 12px', fontSize:11, lineHeight:1.6, resize:'vertical' }} />
         <div style={{ marginTop:8, display:'flex', gap:7, alignItems:'center' }}>
           <button className="g-btn-primary" onClick={save} disabled={saving}
             style={{ padding:'6px 14px', fontSize:11, display:'flex', alignItems:'center', gap:5 }}>
@@ -449,39 +415,32 @@ export default function Admin() {
 
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
-
-      {/* Tab bar */}
       <div style={{
         padding:'0 16px', height:44,
         background:'var(--bg1)', borderBottom:'1px solid var(--b0)',
         display:'flex', alignItems:'center', flexShrink:0,
       }}>
         {TABS.map(t => (
-          <button key={t} onClick={() => setTab(t)}
-            style={{
-              padding:'0 14px', height:'100%',
-              background:'transparent', color: tab===t ? 'var(--acc)' : 'var(--t2)',
-              borderBottom:`2px solid ${tab===t ? 'var(--acc)' : 'transparent'}`,
-              fontSize:10, letterSpacing:'.07em',
-              fontFamily:'"IBM Plex Mono",monospace',
-              transition:'color .15s',
-            }}>
+          <button key={t} onClick={() => setTab(t)} style={{
+            padding:'0 14px', height:'100%',
+            background:'transparent', color: tab===t ? 'var(--acc)' : 'var(--t2)',
+            borderBottom:`2px solid ${tab===t ? 'var(--acc)' : 'transparent'}`,
+            fontSize:10, letterSpacing:'.07em',
+            fontFamily:'"IBM Plex Mono",monospace', transition:'color .15s',
+          }}>
             {t.toUpperCase()}
           </button>
         ))}
-
         <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:8 }}>
           {loading && <Loader size={11} />}
           <StatusDot color="var(--gr)" pulse size={5} />
           <span style={{ fontSize:9, color:'var(--t2)' }}>all systems nominal</span>
-          <button className="g-btn" onClick={refresh}
-            style={{ padding:'3px 9px', fontSize:10, marginLeft:4 }}>
+          <button className="g-btn" onClick={refresh} style={{ padding:'3px 9px', fontSize:10, marginLeft:4 }}>
             ↺
           </button>
         </div>
       </div>
 
-      {/* Content */}
       <div style={{ flex:1, overflowY:'auto', padding:16 }}>
         {PANEL[tab] || null}
       </div>
