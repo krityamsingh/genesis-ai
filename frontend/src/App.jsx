@@ -2,17 +2,17 @@ import { useEffect } from 'react'
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import useGenesisStore from './store/genesisStore'
 import Sidebar from './components/Sidebar'
-import CommandPalette from './components/CommandPalette'
+import CommandPalette from './components/Commandpalette'   // FIX: was ./components/CommandPalette (file is Commandpalette.jsx)
 
-// Pages (lazy-ish — just direct imports for clarity)
-import Login      from './pages/Login'
+// Pages — import names match actual filenames (case-sensitive on Linux)
+import Login      from './pages/login'      // FIX: was ./pages/Login
 import Dashboard  from './pages/Dashboard'
 import Chat       from './pages/Chat'
 import Knowledge  from './pages/Knowledge'
 import Modules    from './pages/Modules'
 import Timeline   from './pages/Timeline'
 import Voice      from './pages/Voice'
-import Admin      from './pages/Admin'
+import Admin      from './pages/admin'       // FIX: was ./pages/Admin
 
 // ── Auth guard ────────────────────────────────────────────────────────────────
 function RequireAuth({ children }) {
