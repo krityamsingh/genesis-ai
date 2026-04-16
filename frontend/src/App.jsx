@@ -1,56 +1,77 @@
-// frontend/src/App.jsx — shell layout with sidebar nav
-import React, { useEffect } from 'react'
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { useEffect } from 'react'
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import useGenesisStore from './store/genesisStore'
+import Sidebar from './components/Sidebar'
+import CommandPalette from './components/CommandPalette'
 
-const NAV = [
-  { to: '/',         label: 'Dashboard',  icon: '🏠' },
-  { to: '/modules',  label: 'Modules',    icon: '🧩' },
-  { to: '/knowledge',label: 'Knowledge',  icon: '🗂️' },
-  { to: '/timeline', label: 'Timeline',   icon: '📅' },
-  { to: '/voice',    label: 'Voice',      icon: '🎙️' },
-]
+// Pages (lazy-ish — just direct imports for clarity)
+import Login      from './pages/Login'
+import Dashboard  from './pages/Dashboard'
+import Chat       from './pages/Chat'
+import Knowledge  from './pages/Knowledge'
+import Modules    from './pages/Modules'
+import Timeline   from './pages/Timeline'
+import Voice      from './pages/Voice'
+import Admin      from './pages/Admin'
 
+// ── Auth guard ────────────────────────────────────────────────────────────────
+function RequireAuth({ children }) {
+  const { authed } = useGenesisStore()
+  const location   = useLocation()
+  if (!authed) return <Navigate to="/login" state={{ from: location }} replace />
+  return children
+}
+
+// ── Shell layout (sidebar + content) ─────────────────────────────────────────
+function Shell({ children }) {
+  return (
+    <div style={{ display: 'flex', height: '100%', overflow: 'hidden', background: 'var(--bg0)' }}>
+      <Sidebar />
+      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {children}
+      </main>
+      <CommandPalette />
+    </div>
+  )
+}
+
+// ── App root ──────────────────────────────────────────────────────────────────
 export default function App() {
-  const { logout, fetchStats } = useGenesisStore()
-  const navigate = useNavigate()
+  const { authed, fetchStats, fetchModules } = useGenesisStore()
+  const navigate  = useNavigate()
+  const location  = useLocation()
 
-  useEffect(() => { fetchStats() }, [fetchStats])
+  // Prefetch on auth
+  useEffect(() => {
+    if (authed) {
+      fetchStats()
+      fetchModules()
+    }
+  }, [authed]) // eslint-disable-line
+
+  // Redirect to dashboard if already authed and on /
+  useEffect(() => {
+    if (authed && location.pathname === '/') navigate('/dashboard', { replace: true })
+  }, [authed, location.pathname]) // eslint-disable-line
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      {/* Sidebar */}
-      <aside className="w-56 bg-gray-900 flex flex-col">
-        <div className="px-6 py-5">
-          <span className="text-white text-xl font-bold tracking-tight">⚡ GENESIS</span>
-        </div>
-        <nav className="flex-1 px-3 space-y-1">
-          {NAV.map(({ to, label, icon }) => (
-            <NavLink
-              key={to} to={to} end={to === '/'}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ` +
-                (isActive ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white')
-              }
-            >
-              <span>{icon}</span>{label}
-            </NavLink>
-          ))}
-        </nav>
-        <div className="p-4 border-t border-gray-800">
-          <button
-            onClick={() => { logout(); navigate('/login') }}
-            className="w-full text-left text-xs text-gray-500 hover:text-gray-300 px-3 py-2"
-          >
-            Sign out
-          </button>
-        </div>
-      </aside>
+    <div style={{ height: '100vh', overflow: 'hidden' }}>
+      <Routes>
+        {/* Public */}
+        <Route path="/login" element={<Login />} />
 
-      {/* Main content */}
-      <main className="flex-1 overflow-auto">
-        <Outlet />
-      </main>
+        {/* Protected */}
+        <Route path="/dashboard" element={<RequireAuth><Shell><Dashboard /></Shell></RequireAuth>} />
+        <Route path="/chat"      element={<RequireAuth><Shell><Chat      /></Shell></RequireAuth>} />
+        <Route path="/knowledge" element={<RequireAuth><Shell><Knowledge /></Shell></RequireAuth>} />
+        <Route path="/modules"   element={<RequireAuth><Shell><Modules   /></Shell></RequireAuth>} />
+        <Route path="/timeline"  element={<RequireAuth><Shell><Timeline  /></Shell></RequireAuth>} />
+        <Route path="/voice"     element={<RequireAuth><Shell><Voice     /></Shell></RequireAuth>} />
+        <Route path="/admin"     element={<RequireAuth><Shell><Admin     /></Shell></RequireAuth>} />
+
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to={authed ? '/dashboard' : '/login'} replace />} />
+      </Routes>
     </div>
   )
 }
