@@ -1,6 +1,9 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { authAPI, coreAPI, moduleAPI, adminAPI } from '../api/client'
+// FIX: use named exports from endpoints.js for auth (correct OAuth2 form encoding)
+// and keep using client.js barrel exports for core/module/admin
+import { login as apiLogin, refreshToken, getMe, logout as apiLogout } from '../api/endpoints'
+import { coreAPI, moduleAPI, adminAPI } from '../api/client'
 
 const useGenesisStore = create(
   persist(
@@ -12,7 +15,8 @@ const useGenesisStore = create(
       authed:   false,
 
       login: async (username, password) => {
-        const res = await authAPI.login(username, password)
+        // FIX: apiLogin() sends application/x-www-form-urlencoded as backend expects
+        const res = await apiLogin(username, password)
         const { access_token, user } = res.data
         localStorage.setItem('genesis_token', access_token)
         set({ token: access_token, user, authed: true })
@@ -20,6 +24,7 @@ const useGenesisStore = create(
       },
 
       logout: () => {
+        apiLogout().catch(() => {}) // best-effort server logout
         localStorage.removeItem('genesis_token')
         set({ token: null, user: null, authed: false, messages: [], stats: null })
       },
@@ -118,9 +123,9 @@ const useGenesisStore = create(
       adminLogs:     [],
       adminTraining: null,
 
-      fetchHealth:   async () => { try { const r = await adminAPI.health();    set({ adminHealth:   r.data }) } catch {} },
-      fetchUsers:    async () => { try { const r = await adminAPI.users();     set({ adminUsers:    r.data }) } catch {} },
-      fetchLogs:     async () => { try { const r = await adminAPI.logs(150);   set({ adminLogs:     r.data }) } catch {} },
+      fetchHealth:   async () => { try { const r = await adminAPI.health();     set({ adminHealth:   r.data }) } catch {} },
+      fetchUsers:    async () => { try { const r = await adminAPI.users();      set({ adminUsers:    r.data }) } catch {} },
+      fetchLogs:     async () => { try { const r = await adminAPI.logs(150);    set({ adminLogs:     r.data }) } catch {} },
       fetchTraining: async () => { try { const r = await adminAPI.trainStatus();set({ adminTraining: r.data }) } catch {} },
 
       // ── Voice ────────────────────────────────────────────────────────────────
