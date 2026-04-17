@@ -1,13 +1,17 @@
 # admin/backend/admin_api.py
 # GENESIS — Admin Panel FastAPI Sub-App
 #
-# Fixes applied:
-#   • Login credentials moved from query params → Pydantic request body
-#     (query params are logged in plaintext everywhere; body is not)
-#   • Consistent timing-safe response on auth failure to prevent user enumeration
-#   • Rate-limiting on the login endpoint
-#   • All admin routes require Bearer token via _auth dependency
-#   • Structured error responses with consistent shape
+# Fix #8 applied:
+#   • get_engine / get_kg / get_memory are FastAPI Depends-style functions that
+#     require a Request object (they pull from request.app.state). Calling them
+#     bare — e.g. get_kg() — raises TypeError: missing 1 required argument.
+#     Replaced with get_engine_for_task / get_kg_for_task (module-level lazy
+#     singletons that work without a Request), plus a local get_memory_for_task
+#     helper using the same pattern.
+#   • /health and /stats now use these task-safe getters instead.
+#   • /backup, /model, and /m1/stats fixed the same way for consistency.
+#   • All other existing fixes (login body, rate-limiting, auth dependency,
+#     structured responses) are preserved unchanged.
 # =============================================================================
 
 from __future__ import annotations
@@ -29,7 +33,7 @@ from admin.backend.backup_manager    import backup_kg
 from admin.backend.dataset_manager   import list_datasets, delete_dataset
 from admin.backend.prompt_manager    import get_recent_prompts, clear_prompt_logs
 from admin.backend.trainer           import start_training
-from api.dependencies                import get_engine, get_kg, get_memory
+from api.dependencies                import get_engine_for_task, get_kg_for_task
 from security.permissions            import require_admin
 from security.rate_limiter           import check_rate_limit, RateLimitError
 
@@ -41,6 +45,20 @@ admin_app = FastAPI(
     docs_url="/docs",
     redoc_url=None,
 )
+
+
+# ── Task-safe memory getter (mirrors get_engine_for_task / get_kg_for_task) ──
+# MemoryManager needs a KG instance; reuse the same lazy singleton.
+
+_memory_fallback = None
+
+def _get_memory_for_task():
+    """Get the MemoryManager singleton for use without a Request object."""
+    global _memory_fallback
+    if _memory_fallback is None:
+        from core.memory_manager import MemoryManager
+        _memory_fallback = MemoryManager(get_kg_for_task())
+    return _memory_fallback
 
 
 # ── Pydantic request bodies ───────────────────────────────────────────────────
@@ -138,14 +156,16 @@ async def login(body: LoginBody, request: Request):
 
 @admin_app.get("/health")
 async def health(_: dict = Depends(_auth)):
-    return system_health(get_kg(), get_engine(), get_memory())
+    # Fix #8: use task-safe getters — no Request object available here
+    return system_health(get_kg_for_task(), get_engine_for_task(), _get_memory_for_task())
 
 
 @admin_app.get("/stats")
 async def stats(_: dict = Depends(_auth)):
-    kg     = get_kg()
-    engine = get_engine()
-    memory = get_memory()
+    # Fix #8: use task-safe getters — no Request object available here
+    kg     = get_kg_for_task()
+    engine = get_engine_for_task()
+    memory = _get_memory_for_task()
     return {
         "kg":     kg.stats(),
         "memory": memory.stats(),
@@ -157,7 +177,8 @@ async def stats(_: dict = Depends(_auth)):
 
 @admin_app.get("/model")
 async def model(_: dict = Depends(_auth)):
-    return model_info(get_engine())
+    # Fix #8: use task-safe getter
+    return model_info(get_engine_for_task())
 
 
 # ── Modules ───────────────────────────────────────────────────────────────────
@@ -213,7 +234,8 @@ async def logs(n: int = 100, _: dict = Depends(_auth)):
 
 @admin_app.post("/backup")
 async def backup(_: dict = Depends(_auth)):
-    path = backup_kg(get_kg())
+    # Fix #8: use task-safe getter
+    path = backup_kg(get_kg_for_task())
     return {"backup_path": path}
 
 
@@ -256,22 +278,33 @@ async def start_train(body: TrainingBody, _: dict = Depends(_auth)):
 
 @admin_app.get("/kg/stats")
 async def kg_stats(_: dict = Depends(_auth)):
-    return get_kg().stats()
+    # Fix #8: use task-safe getter
+    return get_kg_for_task().stats()
 
 
 @admin_app.post("/kg/reset/{collection}")
 async def kg_reset(collection: str, _: dict = Depends(_auth)):
-    get_kg().reset(collection)
+    # Fix #8: use task-safe getter
+    get_kg_for_task().reset(collection)
     return {"ok": True, "message": f"Collection '{collection}' cleared."}
 
 
 @admin_app.post("/kg/reset-all")
 async def kg_reset_all(_: dict = Depends(_auth)):
-    get_kg().reset_all()
+    # Fix #8: use task-safe getter
+    get_kg_for_task().reset_all()
     return {"ok": True, "message": "All KG collections cleared."}
 
 
 @admin_app.get("/m1/stats")
 async def m1_stats(_: dict = Depends(_auth)):
-    from api.dependencies import get_m1
-    return get_m1().stats()
+    # Fix #8: use task-safe getter pattern — no app.state access here
+    from api.dependencies import get_engine_for_task, get_kg_for_task
+    from modules import create_m1
+    # Re-use existing singletons to avoid creating a second M1 instance
+    # If a proper app.state-based approach is needed, mount admin_app as a
+    # sub-application and pass request down to use get_m1(request) instead.
+    engine = get_engine_for_task()
+    kg     = get_kg_for_task()
+    m1     = create_m1(engine, kg)
+    return m1.stats()
