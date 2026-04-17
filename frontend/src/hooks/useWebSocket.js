@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import useGenesisStore from '../store/genesisStore'
 
 /**
@@ -8,19 +8,26 @@ import useGenesisStore from '../store/genesisStore'
  * Streams tokens into the store's streamText field while streaming=true,
  * then finalises into the messages array.
  *
+ * FIX: `connected` was computed as a one-shot ref read at render time —
+ * it never updated. Now uses useState so the Chat "ws connected" badge
+ * actually reflects the live connection state.
+ *
  * Usage:
- *   const { sendQuery } = useWebSocket()
+ *   const { sendQuery, connected } = useWebSocket()
  *   sendQuery('What is self-attention?', 'auto')
  */
 export function useWebSocket() {
-  const wsRef = useRef(null)
+  const wsRef   = useRef(null)
   const pingRef = useRef(null)
+
+  // Reactive connection state — drives the UI badge
+  const [connected, setConnected] = useState(false)
+
   const {
     token,
     addMessage,
     setStreamText,
     setStreaming,
-    streamText,
     chatModule,
   } = useGenesisStore()
 
@@ -35,6 +42,7 @@ export function useWebSocket() {
     ws.onopen = () => {
       // Authenticate immediately after connect
       ws.send(JSON.stringify({ type: 'auth', token }))
+      setConnected(true)
       // Keepalive ping every 25 s
       pingRef.current = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping' }))
@@ -76,11 +84,13 @@ export function useWebSocket() {
     ws.onerror = () => {
       setStreamText('')
       setStreaming(false)
+      setConnected(false)
     }
 
     ws.onclose = () => {
       clearInterval(pingRef.current)
       wsRef.current = null
+      setConnected(false)
       // Reconnect after 3 s if authed
       if (useGenesisStore.getState().authed) {
         setTimeout(connect, 3_000)
@@ -113,7 +123,7 @@ export function useWebSocket() {
     ws.send(JSON.stringify({ type: 'query', query, module_hint }))
   }, [connect, addMessage, setStreaming, setStreamText])
 
-  return { sendQuery, connected: wsRef.current?.readyState === WebSocket.OPEN }
+  return { sendQuery, connected }
 }
 
 export default useWebSocket
