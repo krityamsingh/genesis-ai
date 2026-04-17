@@ -1,6 +1,15 @@
 # tests/conftest.py — shared pytest fixtures
+import os
 import pytest
 from unittest.mock import MagicMock, patch
+
+# ── Fix #7: Set JWT_SECRET before any security.* import ──────────────────────
+# security/jwt_handler.py raises RuntimeError at module import time if
+# JWT_SECRET is not in the environment. Any test that touches auth_routes,
+# permissions, jwt_handler, or anything that imports from security.* will
+# crash immediately without this. Set a deterministic test-only secret FIRST,
+# before any of those imports happen.
+os.environ.setdefault("JWT_SECRET", "test-only-secret-do-not-use-in-production-32x")
 
 
 # ── Fake GemmaEngine ──────────────────────────────────────────────────────────
