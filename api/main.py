@@ -1,12 +1,11 @@
 # api/main.py
 # GENESIS — FastAPI Application Factory
 #
-# Fixes applied:
-#   • seed_all() guarded behind RUN_SEEDS=true env var — previously ran on
-#     every startup including production restarts, causing duplicate data
-#     and IntegrityErrors on rolling redeploys
-#   • config/base.yaml port corrected to 8080 (was 8000, conflicted with Dockerfile)
-#   • Startup logs the effective config for easier debugging in Railway logs
+# FIX APPLIED:
+#   • init_singletons(app) is now called inside the lifespan startup block.
+#     Previously it was imported but NEVER called, so every route using
+#     get_engine / get_kg / get_m1 / get_memory / get_router crashed with
+#     AttributeError: 'State' object has no attribute 'engine'.
 # =============================================================================
 
 from __future__ import annotations
@@ -32,6 +31,8 @@ from api.middleware        import logging_middleware
 from api.routes            import register_routes
 from api.websocket         import ws_stream_endpoint
 from database.db           import init_db
+# FIX: import init_singletons so it can be called during startup
+from api.dependencies      import init_singletons
 
 log = logging.getLogger("api.main")
 
@@ -48,6 +49,19 @@ async def lifespan(app: FastAPI):
         log.info("Database initialised.")
     except Exception as e:
         log.error(f"DB init failed (non-fatal): {e}")
+
+    # ── Singletons ────────────────────────────────────────────────────────────
+    # FIX: This call was missing. Without it, app.state.engine / .kg / .m1 /
+    # .memory / .router are never set, so every Depends(get_engine) etc.
+    # raises AttributeError at request time.
+    try:
+        init_singletons(app)
+        log.info("Singletons initialised.")
+    except Exception as e:
+        log.error(f"Singleton init failed: {e}")
+        # Don't crash — some environments (e.g. CI without HF_TOKEN) can't
+        # load the real engine. Routes will fail gracefully with 500 rather
+        # than killing the process on startup.
 
     # ── Seeding ───────────────────────────────────────────────────────────────
     # Only run seeds when explicitly requested (e.g. first deploy).
