@@ -1,3 +1,9 @@
+// frontend/src/api/client.js
+//
+// FIX APPLIED:
+//   • coreAPI.ask was calling POST /core/query — backend route is POST /core/ask.
+//     This caused every chat message to get a 404. Changed to /core/ask.
+//
 import axios from 'axios'
 
 // ── Axios instance ────────────────────────────────────────────────────────────
@@ -41,8 +47,9 @@ export const coreAPI = {
   /** Ingest a source (URL, PDF path, raw text) into the knowledge graph */
   learn:         (source, source_type = 'url') => api.post('/core/learn', { source, source_type }),
 
+  // FIX: was '/core/query' — backend route is '/core/ask' (404 on every message)
   /** Ask a question (non-streaming) */
-  ask:           (query, module_hint = null)   => api.post('/core/query', { query, module_hint }),
+  ask:           (query, module_hint = null)   => api.post('/core/ask', { query, module_hint }),
 
   /** Auto-route a complex query to the best module */
   route:         (query)                       => api.post('/core/route', { query }),
@@ -59,7 +66,7 @@ export const coreAPI = {
 
 // ── Modules ───────────────────────────────────────────────────────────────────
 export const moduleAPI = {
-  list:          ()          => api.get  ('/modules'),
+  list:          ()          => api.get  ('/modules/'),
   toggle:        (id, state) => api.patch(`/modules/${id}`, { enabled: state }),
   info:          (id)        => api.get  (`/modules/${id}`),
 }
