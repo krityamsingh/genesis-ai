@@ -1,20 +1,20 @@
 # api/v1/core_routes.py
 # GENESIS — Core API Routes
 #
-# Fixes applied:
-#   • Every route now requires a valid Bearer JWT (previously all were open)
-#   • /summarise changed from POST (no body) → GET (correct HTTP semantics)
-#   • /export-dataset restricted to admin-only (exports your full training data)
-#   • Per-user rate limiting on expensive endpoints (learn, ask)
-#   • Consistent error handling — no raw exceptions leak to clients
-#   • Request logging includes user ID for audit trail
+# FIX APPLIED:
+#   • /learn endpoint built LearnResponse with:
+#       LearnResponse(**{k: result.get(k, None) for k in LearnResponse.model_fields})
+#     When result is an error dict (missing skills_found/concepts_found/duration_sec),
+#     those fields get None — but they are typed as `int` and `float` in the schema,
+#     so Pydantic raises ValidationError (500) instead of returning the error.
+#     Fix: use the schema defaults as fallback values, not None.
 # =============================================================================
 
 from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, Header, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from typing import Optional
 
 from api.dependencies  import get_m1, get_memory, get_router, get_engine, get_kg
@@ -56,17 +56,37 @@ def _user_rate_limit(
     request: Request,
     claims: dict = Depends(_auth),
 ) -> dict:
-    """
-    Combined auth + per-user rate limit (60 req/min).
-    Use as a dependency on endpoints that hit the LLM.
-    """
     user_id = claims.get("sub", request.client.host if request.client else "anon")
     try:
         check_rate_limit(f"user:{user_id}:core", limit=60)
     except RateLimitError as e:
-        from fastapi import HTTPException
         raise HTTPException(status_code=429, detail=str(e), headers={"Retry-After": "60"})
     return claims
+
+
+# ── Helper — build LearnResponse safely ──────────────────────────────────────
+
+def _build_learn_response(result: dict) -> LearnResponse:
+    """
+    FIX: Previously used `result.get(k, None)` for every field — but
+    skills_found, concepts_found (int) and duration_sec (float) have non-None
+    defaults in the schema.  Passing None into an `int` field raises a
+    Pydantic ValidationError.  Instead, fall back to each field's schema
+    default so the response is always valid.
+    """
+    defaults = {
+        "response":               "",
+        "source":                 "",
+        "knowledge_items_stored": 0,
+        "domain":                 None,
+        "difficulty":             None,
+        "skills_found":           0,     # int — must NOT be None
+        "concepts_found":         0,     # int — must NOT be None
+        "duration_sec":           0.0,   # float — must NOT be None
+        "error":                  None,
+    }
+    merged = {k: result.get(k, defaults[k]) for k in defaults}
+    return LearnResponse(**merged)
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -77,18 +97,13 @@ async def learn(
     m1=Depends(get_m1),
     claims: dict = Depends(_user_rate_limit),
 ):
-    """
-    Feed any source (text, URL, PDF path) to the M1 Self-Learner.
-    Requires: authenticated user.
-    Rate limit: 60 requests per minute per user.
-    """
     log.info(f"learn: user={claims.get('sub')} source_len={len(req.source)}")
     try:
         result = m1.learn(req.source)
-        return LearnResponse(**{k: result.get(k, None) for k in LearnResponse.model_fields})
+        # FIX: use safe builder instead of {k: result.get(k, None) ...}
+        return _build_learn_response(result)
     except Exception as e:
         log.error(f"learn error: {e}")
-        from fastapi import HTTPException
         raise HTTPException(status_code=500, detail="Learning failed. Check server logs.")
 
 
@@ -98,10 +113,6 @@ async def ask(
     m1=Depends(get_m1),
     claims: dict = Depends(_user_rate_limit),
 ):
-    """
-    Answer a question from stored knowledge.
-    Requires: authenticated user.
-    """
     log.debug(f"ask: user={claims.get('sub')} query={req.query[:80]}")
     return TextResponse(result=m1.ask(req.query))
 
@@ -112,10 +123,6 @@ async def teach(
     m1=Depends(get_m1),
     claims: dict = Depends(_user_rate_limit),
 ):
-    """
-    Explain a topic at the requested level.
-    Requires: authenticated user.
-    """
     level = req.level or "intermediate"
     return TextResponse(result=m1.teach(req.query, level=level))
 
@@ -126,11 +133,7 @@ async def quiz(
     m1=Depends(get_m1),
     claims: dict = Depends(_user_rate_limit),
 ):
-    """
-    Generate a quiz on a topic.
-    Requires: authenticated user.
-    """
-    n = min(req.n or 3, 20)   # cap at 20 questions
+    n = min(req.n or 3, 20)
     return TextResponse(result=m1.quiz(req.query, n=n, show_answers=req.show_answers or False))
 
 
@@ -140,11 +143,7 @@ async def flashcards(
     m1=Depends(get_m1),
     claims: dict = Depends(_user_rate_limit),
 ):
-    """
-    Generate flashcards for a topic.
-    Requires: authenticated user.
-    """
-    n = min(req.n or 5, 50)   # cap at 50 cards
+    n = min(req.n or 5, 50)
     return TextResponse(result=m1.flashcards(req.query, n=n))
 
 
@@ -153,13 +152,6 @@ async def summarise(
     m1=Depends(get_m1),
     claims: dict = Depends(_auth),
 ):
-    """
-    Summarise the entire knowledge base.
-    Requires: authenticated user.
-
-    Changed from POST (no body) to GET — POST with no body is incorrect
-    HTTP semantics and confuses OpenAPI consumers.
-    """
     return TextResponse(result=m1.summarise())
 
 
@@ -169,10 +161,6 @@ async def route(
     router_=Depends(get_router),
     claims: dict = Depends(_auth),
 ):
-    """
-    Auto-route a query to the best module.
-    Requires: authenticated user.
-    """
     result = router_.route(req.query)
     return RouteResponse(**result)
 
@@ -186,10 +174,6 @@ async def stats(
     m1=Depends(get_m1),
     claims: dict = Depends(_auth),
 ):
-    """
-    System stats for the dashboard.
-    Requires: authenticated user.
-    """
     return {
         "engine": str(engine),
         "kg":     kg.stats(),
@@ -204,10 +188,6 @@ async def export_dataset(
     kg=Depends(get_kg),
     claims: dict = Depends(_admin_auth),
 ):
-    """
-    Export a training dataset from stored knowledge.
-    Requires: ADMIN — this exports your entire knowledge graph as training data.
-    """
     log.info(f"export-dataset: requested by admin={claims.get('sub')}")
     from core.dataset_generator import DatasetGenerator
     generator = DatasetGenerator(kg)
