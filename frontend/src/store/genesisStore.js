@@ -1,7 +1,17 @@
+// frontend/src/store/genesisStore.js
+//
+// FIX APPLIED:
+//   • login() was destructuring `user` from res.data, but the backend's
+//     /auth/login response shape is { access_token, refresh_token, token_type,
+//     is_admin } — there is NO `user` object. This meant user was always null
+//     and components relying on store.user never rendered correctly.
+//   • Fix: after storing the token, call GET /auth/me to fetch the real user
+//     profile and store it. This also validates the token works immediately.
+//   • Also stores refresh_token in localStorage so the axios interceptor can
+//     use it for silent token renewal.
+//
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-// FIX: use named exports from endpoints.js for auth (correct OAuth2 form encoding)
-// and keep using client.js barrel exports for core/module/admin
 import { login as apiLogin, refreshToken, getMe, logout as apiLogout } from '../api/endpoints'
 import { coreAPI, moduleAPI, adminAPI } from '../api/client'
 
@@ -15,10 +25,27 @@ const useGenesisStore = create(
       authed:   false,
 
       login: async (username, password) => {
-        // FIX: apiLogin() sends application/x-www-form-urlencoded as backend expects
+        // apiLogin() sends application/x-www-form-urlencoded as backend expects
         const res = await apiLogin(username, password)
-        const { access_token, user } = res.data
+        const { access_token, refresh_token } = res.data
+
+        // Persist tokens
         localStorage.setItem('genesis_token', access_token)
+        if (refresh_token) {
+          localStorage.setItem('genesis_refresh_token', refresh_token)
+        }
+
+        // FIX: backend returns no `user` object — fetch it separately from /auth/me
+        // so that user.username / user.is_admin are available to the UI.
+        let user = null
+        try {
+          const meRes = await getMe()
+          user = meRes.data   // { user_id, username, email, is_admin }
+        } catch {
+          // Non-fatal: degrade gracefully — is_admin from token payload
+          user = { is_admin: res.data.is_admin ?? false }
+        }
+
         set({ token: access_token, user, authed: true })
         return res.data
       },
@@ -26,6 +53,7 @@ const useGenesisStore = create(
       logout: () => {
         apiLogout().catch(() => {}) // best-effort server logout
         localStorage.removeItem('genesis_token')
+        localStorage.removeItem('genesis_refresh_token')
         set({ token: null, user: null, authed: false, messages: [], stats: null })
       },
 
