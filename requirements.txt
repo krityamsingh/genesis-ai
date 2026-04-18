@@ -1,13 +1,11 @@
 # =============================================================================
-# GENESIS — requirements.txt
+# GENESIS — Railway requirements (API-only, no training deps)
 #
-# Fixes applied:
-#   • Added all training dependencies (torch, transformers, peft, trl, datasets,
-#     bitsandbytes, accelerate) — previously missing, crashed Celery worker
-#   • Uncommented chromadb (required by KnowledgeGraph)
-#   • Added google-generativeai and openai + xai for multi-provider caller
-#   • Pinned versions to avoid silent breaking upgrades
-#   • Separated core / optional / training sections clearly
+# torch / transformers / peft / trl / bitsandbytes are EXCLUDED:
+#   • They add ~3 GB to the image
+#   • Railway build will timeout or OOM without a GPU builder
+#   • Training tasks require a dedicated GPU worker — not Railway free/hobby tier
+#   • Use requirements.txt locally or on a GPU machine for training
 # =============================================================================
 
 # ── Web Framework ─────────────────────────────────────────────────────────────
@@ -29,13 +27,12 @@ psycopg2-binary==2.9.10
 huggingface-hub==0.27.0
 
 # ── Multi-Provider AI Callers ─────────────────────────────────────────────────
-# Required by core/caller.py — these were missing entirely
-google-generativeai==0.8.3        # _call_gemini
-openai==1.58.1                    # _call_openai + _call_grok (OpenAI-compatible)
+google-generativeai==0.8.3
+openai==1.58.1
 
 # ── Security ──────────────────────────────────────────────────────────────────
-python-jose[cryptography]==3.3.0  # JWT — used by the new jwt_handler.py
-passlib[bcrypt]==1.7.4            # password hashing
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
 
 # ── HTTP / Ingestion ──────────────────────────────────────────────────────────
 requests==2.32.3
@@ -48,32 +45,10 @@ pyyaml==6.0.2
 
 # ── Task Queue ────────────────────────────────────────────────────────────────
 celery==5.4.0
-redis==5.2.1     # used by both Celery broker AND the new Redis rate limiter
+redis==5.2.1
 
-# ── TTS — Text to Speech ──────────────────────────────────────────────────────
+# ── TTS ───────────────────────────────────────────────────────────────────────
 gtts==2.5.4
-# pyttsx3>=2.90       # offline TTS — no audio hardware on Railway, skip
-# pygame>=2.5.0       # audio playback — not available on Railway, skip
 
-# ── STT — Speech to Text ──────────────────────────────────────────────────────
-# openai-whisper>=20231117  # ~1GB model + ffmpeg — enable only locally if needed
-
-# ── Vector Store / Semantic Search ────────────────────────────────────────────
-# Required by core/knowledge_graph.py — was previously commented out
+# ── Vector Store ──────────────────────────────────────────────────────────────
 chromadb==0.6.3
-
-# =============================================================================
-# TRAINING DEPENDENCIES
-# Previously completely missing — Celery worker crashed on any training task
-#
-# These are large packages (~3GB with CUDA). For Railway API-only deployments
-# without GPU, you may want to move these to a separate requirements-train.txt
-# and install only on your training worker image.
-# =============================================================================
-torch==2.5.1
-transformers==4.47.1
-peft==0.14.0
-trl==0.13.0
-datasets==3.2.0
-bitsandbytes==0.45.0
-accelerate==1.2.1
