@@ -42,9 +42,9 @@ RUN apt-get update \
 # Upgrade pip to avoid installation issues with newer packages
 RUN pip install --no-cache-dir --upgrade pip
 
-# Python deps
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Python deps — use Railway-slim (no torch/transformers, saves ~3 GB)
+COPY requirements-railway.txt .
+RUN pip install --no-cache-dir -r requirements-railway.txt
 
 # Copy application source
 COPY . .
