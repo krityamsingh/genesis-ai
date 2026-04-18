@@ -1,11 +1,12 @@
 # api/main.py
 # GENESIS — FastAPI Application Factory
 #
-# FIX APPLIED:
-#   • init_singletons(app) is now called inside the lifespan startup block.
-#     Previously it was imported but NEVER called, so every route using
-#     get_engine / get_kg / get_m1 / get_memory / get_router crashed with
-#     AttributeError: 'State' object has no attribute 'engine'.
+# FIXES APPLIED:
+#   • init_singletons(app) called during lifespan startup (was missing before).
+#   • Auto-seed: if the users table is empty on startup, seed_all() runs
+#     automatically so the admin user always exists without requiring the
+#     operator to remember RUN_SEEDS=true on first deploy.
+#     Subsequent restarts skip seeding (idempotent seed_all).
 # =============================================================================
 
 from __future__ import annotations
@@ -31,7 +32,6 @@ from api.middleware        import logging_middleware
 from api.routes            import register_routes
 from api.websocket         import ws_stream_endpoint
 from database.db           import init_db
-# FIX: import init_singletons so it can be called during startup
 from api.dependencies      import init_singletons
 
 log = logging.getLogger("api.main")
@@ -50,33 +50,41 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         log.error(f"DB init failed (non-fatal): {e}")
 
+    # ── Auto-seed if admin user doesn't exist ─────────────────────────────────
+    # This replaces the RUN_SEEDS=true mechanism so operators don't need to
+    # remember to set an env var on first deploy. seed_all() is idempotent.
+    try:
+        from database.db import db_session
+        from database.models import User
+        with db_session() as db:
+            has_admin = db.query(User).filter_by(is_admin=True).first()
+
+        if not has_admin:
+            log.info("No admin user found — running seeds automatically.")
+            from database.seeds import seed_all
+            result = seed_all()
+            log.info(f"Auto-seed complete: {result}")
+        else:
+            log.info("Admin user exists — skipping auto-seed.")
+    except Exception as e:
+        log.error(f"Auto-seed failed (non-fatal): {e}")
+
+    # ── Manual seed override (kept for CI / reset scenarios) ──────────────────
+    if os.getenv("RUN_SEEDS", "false").lower() == "true":
+        try:
+            from database.seeds import seed_all
+            seed_all()
+            log.info("Manual seed (RUN_SEEDS=true) complete.")
+        except Exception as e:
+            log.error(f"Manual seed failed (non-fatal): {e}")
+
     # ── Singletons ────────────────────────────────────────────────────────────
-    # FIX: This call was missing. Without it, app.state.engine / .kg / .m1 /
-    # .memory / .router are never set, so every Depends(get_engine) etc.
-    # raises AttributeError at request time.
     try:
         init_singletons(app)
         log.info("Singletons initialised.")
     except Exception as e:
         log.error(f"Singleton init failed: {e}")
-        # Don't crash — some environments (e.g. CI without HF_TOKEN) can't
-        # load the real engine. Routes will fail gracefully with 500 rather
-        # than killing the process on startup.
 
-    # ── Seeding ───────────────────────────────────────────────────────────────
-    # Only run seeds when explicitly requested (e.g. first deploy).
-    # Set RUN_SEEDS=true in env to trigger. Never run on every restart.
-    if os.getenv("RUN_SEEDS", "false").lower() == "true":
-        try:
-            from database.seeds import seed_all
-            seed_all()
-            log.info("Database seeded successfully.")
-        except Exception as e:
-            log.error(f"Seeding failed (non-fatal): {e}")
-    else:
-        log.info("Skipping seeds (RUN_SEEDS != true).")
-
-    # ── Log startup config for debugging ─────────────────────────────────────
     log.info(
         f"GENESIS starting | "
         f"model={os.getenv('GEMMA_MODEL', 'default')} | "
@@ -108,13 +116,13 @@ def create_app() -> FastAPI:
     app.add_exception_handler(GenesisError, genesis_exception_handler)
     app.add_exception_handler(Exception,    generic_exception_handler)
 
-    # API routes
+    # API routes (includes admin sub-app mount)
     register_routes(app)
 
     # WebSocket
     app.add_api_websocket_route("/ws/stream", ws_stream_endpoint)
 
-    # Health check (no auth — Railway healthcheck hits this)
+    # Health check (no auth)
     @app.get("/health", include_in_schema=False)
     async def health():
         return {"status": "ok", "service": "genesis-api"}
