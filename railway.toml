@@ -3,9 +3,29 @@ builder = "dockerfile"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-# Railway injects PORT at runtime; avoid shell-specific default expansion
-# that can be passed literally and crash uvicorn parsing.
 startCommand = "sh -c 'uvicorn api.main:app --host 0.0.0.0 --port ${PORT}'"
 healthcheckPath = "/health"
 healthcheckTimeout = 60
 restartPolicyType = "on_failure"
+
+# ── Environment variables ─────────────────────────────────────────────────────
+# Set these in Railway Dashboard → Service → Variables
+# (Do NOT store secrets in this file — it is committed to git)
+#
+#   ADMIN_USERNAME     = admin
+#   ADMIN_PASSWORD     = <your password, min 8 chars, not "changeme">
+#   ADMIN_EMAIL        = admin@yourdomain.com
+#
+#   JWT_SECRET         = <run: openssl rand -hex 32>
+#   JWT_EXPIRE_HOURS   = 24
+#
+#   DATABASE_URL       = (Railway Postgres plugin auto-injects this)
+#
+#   GEMMA_MODEL        = default
+#   HF_TOKEN           = hf_xxxxxxxxxxxxxxxxxxxx
+#
+#   OPENAI_API_KEY     = sk-...        (optional)
+#   GEMINI_API_KEY     = ...           (optional)
+#
+#   CORS_ORIGINS       = https://your-frontend.up.railway.app
+#   LOG_LEVEL          = INFO
