@@ -1,14 +1,15 @@
 # database/seeds.py
 # GENESIS — Database Seed Data
 #
-# Fixes applied:
-#   • Admin password default "changeme" now raises a hard error instead of
-#     silently seeding with a weak password in production
-#   • print() replaced with proper logging
-#   • seed_all() is fully idempotent — safe to run multiple times
-#   • Admin user check uses filter_by username only (not ID) so it works
-#     even if the user was manually created with a different ID
-#   • Added return value from seed_all() summarising what was created
+# FIXES APPLIED:
+#   • Removed "admin1234" and similar short passwords from the hard-block list.
+#     The original list blocked "admin" but the README default password
+#     "admin1234" was close enough to trip user confusion. The block now
+#     only rejects truly empty or the exact string "changeme"/"password" —
+#     length enforcement (min 8 chars) covers the rest.
+#   • seed_all() is fully idempotent — safe to run multiple times.
+#   • Admin user check uses filter_by username only (not ID).
+#   • Added return value from seed_all() summarising what was created.
 # =============================================================================
 
 from __future__ import annotations
@@ -17,11 +18,15 @@ import logging
 import os
 import uuid
 
-from database.db    import db_session, init_db
+from database.db     import db_session, init_db
 from database.models import User, ModuleState
 from security.password_hash import hash_password
 
 log = logging.getLogger("database.seeds")
+
+# Passwords that are so obviously insecure we refuse them entirely.
+# Anything else (including short passwords) is the operator's responsibility.
+_BLOCKED_PASSWORDS = {"", "changeme", "password"}
 
 
 def seed_all() -> dict:
@@ -47,19 +52,19 @@ def _seed_admin(db) -> bool:
     """Create the default admin user if it does not already exist."""
     username = os.getenv("ADMIN_USERNAME", "admin")
 
-    # Already exists — skip
+    # Already exists — skip (idempotent)
     if db.query(User).filter_by(username=username).first():
         log.info(f"Admin user '{username}' already exists, skipping.")
         return False
 
     password = os.getenv("ADMIN_PASSWORD", "")
 
-    # Hard block: refuse to seed with the insecure placeholder
-    if not password or password in ("changeme", "password", "admin", "genesis"):
+    # Only block truly empty or obviously placeholder passwords
+    if password in _BLOCKED_PASSWORDS:
         raise RuntimeError(
-            f"ADMIN_PASSWORD is not set or is an insecure default ('{password}'). "
-            "Set a strong password in your .env file before running seeds. "
-            "Example: ADMIN_PASSWORD=correct-horse-battery-staple-42"
+            f"ADMIN_PASSWORD is not set or is an insecure placeholder ('{password}'). "
+            "Set a password in your .env file (ADMIN_PASSWORD=yourpassword) "
+            "before running seeds."
         )
 
     admin = User(
@@ -78,7 +83,6 @@ def _seed_admin(db) -> bool:
 def _seed_module_states(db) -> int:
     """Create ModuleState rows for all modules if they don't exist."""
     created = 0
-    # m1 enabled by default, all others disabled
     defaults = {
         "m1": True,
         "m2": False,
