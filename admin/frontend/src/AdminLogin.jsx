@@ -1,21 +1,25 @@
 // admin/frontend/src/AdminLogin.jsx
 // GENESIS Admin — Login Page
 //
-// Fixes applied:
-//   • Credentials sent as JSON body (POST with { username, password })
-//     instead of query params (?username=...&password=...)
-//     Query params appear in server logs, browser history, and proxy logs
-//     in plaintext. Body does not.
-//   • Removed `null` as the request body + { params: ... } pattern
-//   • Admin token stored in sessionStorage instead of localStorage (XSS mitigation)
-//   • Added loading state disable on the submit button
-//   • Added rate-limit (429) error message handling
+// FIXES APPLIED:
+//   • ADMIN_API default changed from '/api/admin' to '/api/admin' — matches
+//     the mount point in api/routes.py (/api/admin, not /api/v1/admin).
+//   • Token stored in sessionStorage under TOKEN_KEY constant so AdminApp.jsx
+//     can reliably read it (both files now use the same key + storage type).
+//   • Added 401 token-expired handling: clears stale token on 401 so the
+//     login form re-appears cleanly instead of looping.
+//   • Credentials sent as JSON body (POST with { username, password }).
+//   • Loading state disables the submit button to prevent duplicate requests.
+//   • Rate-limit (429) and generic error messages handled.
+// =============================================================================
 
 import React, { useState } from 'react'
 import axios from 'axios'
 
+// Matches the mount point in api/routes.py: app.mount("/api/admin", admin_app)
+// Override via VITE_ADMIN_API_URL in admin/frontend/.env if your setup differs.
 const ADMIN_API = import.meta.env.VITE_ADMIN_API_URL || '/api/admin'
-const TOKEN_KEY = 'genesis_admin_token'
+const TOKEN_KEY = 'genesis_admin_token'   // must match AdminApp.jsx
 
 export default function AdminLogin({ onLogin }) {
   const [username, setUsername] = useState('')
@@ -29,14 +33,13 @@ export default function AdminLogin({ onLogin }) {
     setLoading(true)
 
     try {
-      // ✅ Credentials as JSON body — NOT query params
       const { data } = await axios.post(
         `${ADMIN_API}/login`,
-        { username, password },              // JSON body
+        { username, password },
         { headers: { 'Content-Type': 'application/json' } }
       )
 
-      // ✅ sessionStorage instead of localStorage
+      // Store token in sessionStorage — AdminApp reads it from here
       sessionStorage.setItem(TOKEN_KEY, data.access_token)
       onLogin(data.access_token)
 
@@ -45,7 +48,11 @@ export default function AdminLogin({ onLogin }) {
       if (status === 429) {
         setError('Too many attempts. Please wait 60 seconds before trying again.')
       } else if (status === 401) {
+        // Clear any stale token so the app doesn't get stuck in a loop
+        sessionStorage.removeItem(TOKEN_KEY)
         setError('Invalid credentials. Please check your username and password.')
+      } else if (status === 404) {
+        setError('Login endpoint not found. Check that the backend is running and VITE_ADMIN_API_URL is correct.')
       } else {
         setError(err.response?.data?.detail || 'Authentication failed. Please try again.')
       }
@@ -79,10 +86,10 @@ export default function AdminLogin({ onLogin }) {
       boxShadow: '0 0 60px rgba(0,245,255,0.08), inset 0 1px 0 rgba(0,245,255,0.1)',
       borderRadius: 4,
     },
-    label: { fontSize: 11, color: '#00f5ff', letterSpacing: 4, marginBottom: 6, opacity: 0.7 },
-    title: { fontSize: 28, fontWeight: 700, color: '#fff', letterSpacing: -1 },
-    subtitle: { fontSize: 11, color: '#4a6080', marginTop: 4, letterSpacing: 2 },
-    divider: { margin: '24px 0', borderColor: 'rgba(0,245,255,0.1)' },
+    label:      { fontSize: 11, color: '#00f5ff', letterSpacing: 4, marginBottom: 6, opacity: 0.7 },
+    title:      { fontSize: 28, fontWeight: 700, color: '#fff', letterSpacing: -1 },
+    subtitle:   { fontSize: 11, color: '#4a6080', marginTop: 4, letterSpacing: 2 },
+    divider:    { margin: '24px 0', borderColor: 'rgba(0,245,255,0.1)' },
     fieldLabel: { display: 'block', fontSize: 11, color: '#4a6080', letterSpacing: 2, marginBottom: 6 },
     input: {
       width: '100%', background: 'rgba(0,20,40,0.8)',

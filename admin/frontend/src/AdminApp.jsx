@@ -1,14 +1,28 @@
+// admin/frontend/src/AdminApp.jsx
+// GENESIS Admin — Shell / Layout
+//
+// FIXES APPLIED:
+//   • Token stored in sessionStorage (matching AdminLogin.jsx which also uses
+//     sessionStorage). Previously AdminApp read/wrote localStorage while
+//     AdminLogin wrote to sessionStorage — the token was never found on
+//     page load so every refresh forced a re-login even with a valid token.
+//   • Corrected import: LogsViewer → logsviewer (file is logsviewer.jsx,
+//     not LogsViewer.jsx — case-sensitive on Linux).
+// =============================================================================
+
 import React, { useState } from 'react'
-import AdminLogin     from './AdminLogin'
-import SystemHealth   from './SystemHealth'
-import ModelMonitor   from './ModelMonitor'
-import ModuleManager  from './ModuleManager'
-import UserManager    from './UserManager'
-import LogsViewer     from './LogsViewer'
-import BackupManager  from './BackupManager'
+import AdminLogin      from './AdminLogin'
+import SystemHealth    from './SystemHealth'
+import ModelMonitor    from './ModelMonitor'
+import ModuleManager   from './ModuleManager'
+import UserManager     from './UserManager'
+import LogsViewer      from './logsviewer'
+import BackupManager   from './BackupManager'
 import DatasetUploader from './DatasetUploader'
-import PromptEditor   from './PromptEditor'
-import TrainingPanel  from './TrainingPanel'
+import PromptEditor    from './PromptEditor'
+import TrainingPanel   from './TrainingPanel'
+
+const TOKEN_KEY = 'genesis_admin_token'   // must match AdminLogin.jsx
 
 const NAV = [
   { key: 'Health',    icon: '◈', label: 'System Health' },
@@ -41,8 +55,8 @@ const S = {
     borderBottom: '1px solid rgba(0,245,255,0.08)',
   },
   logoText: { fontSize: 16, fontWeight: 700, color: '#fff', letterSpacing: -0.5 },
-  logoDot: { color: '#00f5ff' },
-  logoSub: { fontSize: 9, color: '#2a4a60', letterSpacing: 2, marginTop: 3 },
+  logoDot:  { color: '#00f5ff' },
+  logoSub:  { fontSize: 9, color: '#2a4a60', letterSpacing: 2, marginTop: 3 },
   nav: { flex: 1, padding: '12px 10px', display: 'flex', flexDirection: 'column', gap: 2 },
   navBtn: (active) => ({
     display: 'flex', alignItems: 'center', gap: 10,
@@ -78,21 +92,23 @@ const S = {
     marginBottom: 0,
   },
   breadcrumb: { fontSize: 10, color: '#2a4a60', letterSpacing: 2, marginBottom: 4 },
-  mainTitle: { fontSize: 20, fontWeight: 700, color: '#fff', paddingBottom: 16 },
-  content: { padding: '28px 32px' },
+  mainTitle:  { fontSize: 20, fontWeight: 700, color: '#fff', paddingBottom: 16 },
+  content:    { padding: '28px 32px' },
 }
 
 export default function AdminApp() {
-  const [token, setToken] = useState(localStorage.getItem('genesis_admin_token') || '')
+  // FIX: read from sessionStorage (AdminLogin writes there)
+  const [token, setToken] = useState(sessionStorage.getItem(TOKEN_KEY) || '')
   const [tab,   setTab]   = useState('Health')
 
   if (!token) return <AdminLogin onLogin={setToken} />
 
-  const Panel     = PANELS[tab]
-  const navItem   = NAV.find(n => n.key === tab)
+  const Panel   = PANELS[tab]
+  const navItem = NAV.find(n => n.key === tab)
 
   const logout = () => {
-    localStorage.removeItem('genesis_admin_token')
+    // FIX: clear sessionStorage (not localStorage)
+    sessionStorage.removeItem(TOKEN_KEY)
     setToken('')
   }
 
