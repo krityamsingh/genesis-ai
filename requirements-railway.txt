@@ -1,0 +1,54 @@
+# =============================================================================
+# GENESIS — Railway requirements (API-only, no training deps)
+#
+# torch / transformers / peft / trl / bitsandbytes are EXCLUDED:
+#   • They add ~3 GB to the image
+#   • Railway build will timeout or OOM without a GPU builder
+#   • Training tasks require a dedicated GPU worker — not Railway free/hobby tier
+#   • Use requirements.txt locally or on a GPU machine for training
+# =============================================================================
+
+# ── Web Framework ─────────────────────────────────────────────────────────────
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+starlette==0.41.3
+python-multipart==0.0.18
+
+# ── Data Validation ───────────────────────────────────────────────────────────
+pydantic==2.10.4
+pydantic-settings==2.7.0
+
+# ── Database ──────────────────────────────────────────────────────────────────
+sqlalchemy==2.0.36
+alembic==1.14.0
+psycopg2-binary==2.9.10
+
+# ── AI / HuggingFace (primary engine) ────────────────────────────────────────
+huggingface-hub==0.27.0
+
+# ── Multi-Provider AI Callers ─────────────────────────────────────────────────
+google-generativeai==0.8.3
+openai==1.58.1
+
+# ── Security ──────────────────────────────────────────────────────────────────
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# ── HTTP / Ingestion ──────────────────────────────────────────────────────────
+requests==2.32.3
+httpx==0.28.1
+PyPDF2==3.0.1
+
+# ── Config / Utils ────────────────────────────────────────────────────────────
+python-dotenv==1.0.1
+pyyaml==6.0.2
+
+# ── Task Queue ────────────────────────────────────────────────────────────────
+celery==5.4.0
+redis==5.2.1
+
+# ── TTS ───────────────────────────────────────────────────────────────────────
+gtts==2.5.4
+
+# ── Vector Store ──────────────────────────────────────────────────────────────
+chromadb==0.6.3
