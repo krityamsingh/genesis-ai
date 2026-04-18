@@ -1,18 +1,34 @@
-import { useEffect } from 'react'
+import { useEffect, Suspense, lazy } from 'react'
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import useGenesisStore from './store/genesisStore'
-import Sidebar from './components/Sidebar'
-import CommandPalette from './components/Commandpalette'   // FIX: was ./components/CommandPalette (file is Commandpalette.jsx)
+import AppShell from './components/AppShell'
 
-// Pages — import names match actual filenames (case-sensitive on Linux)
-import Login      from './pages/login'      // FIX: was ./pages/Login
-import Dashboard  from './pages/Dashboard'
-import Chat       from './pages/Chat'
-import Knowledge  from './pages/Knowledge'
-import Modules    from './pages/Modules'
-import Timeline   from './pages/Timeline'
-import Voice      from './pages/Voice'
-import Admin      from './pages/admin'       // FIX: was ./pages/Admin
+// ── Lazy-load all pages for code splitting ────────────────────────────────────
+const Login        = lazy(() => import('./pages/login'))
+const AuthCallback = lazy(() => import('./pages/AuthCallback'))
+const Dashboard    = lazy(() => import('./pages/Dashboard'))
+const Chat         = lazy(() => import('./pages/Chat'))
+const Knowledge    = lazy(() => import('./pages/Knowledge'))
+const Modules      = lazy(() => import('./pages/Modules'))
+const Timeline     = lazy(() => import('./pages/Timeline'))
+const Voice        = lazy(() => import('./pages/Voice'))
+const Admin        = lazy(() => import('./pages/admin'))
+const Settings     = lazy(() => import('./pages/Settings'))
+
+// ── Skeleton page loader ──────────────────────────────────────────────────────
+function PageLoader() {
+  return (
+    <div style={{ padding: '24px', animation: 'pageFadeIn 300ms' }}>
+      {[80, 60, 100, 70].map((w, i) => (
+        <div
+          key={i}
+          className="skeleton"
+          style={{ height: '14px', width: `${w}%`, borderRadius: '6px', marginBottom: '12px' }}
+        />
+      ))}
+    </div>
+  )
+}
 
 // ── Auth guard ────────────────────────────────────────────────────────────────
 function RequireAuth({ children }) {
@@ -22,16 +38,26 @@ function RequireAuth({ children }) {
   return children
 }
 
-// ── Shell layout (sidebar + content) ─────────────────────────────────────────
-function Shell({ children }) {
+// ── Admin guard ───────────────────────────────────────────────────────────────
+function RequireAdmin({ children }) {
+  const { authed, user } = useGenesisStore()
+  const location         = useLocation()
+  if (!authed)          return <Navigate to="/login" state={{ from: location }} replace />
+  if (!user?.is_admin)  return <Navigate to="/dashboard" replace />
+  return children
+}
+
+// ── Protected shell wrapper ───────────────────────────────────────────────────
+function Protected({ children, adminOnly = false }) {
+  const Guard = adminOnly ? RequireAdmin : RequireAuth
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden', background: 'var(--bg0)' }}>
-      <Sidebar />
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        {children}
-      </main>
-      <CommandPalette />
-    </div>
+    <Guard>
+      <AppShell>
+        <Suspense fallback={<PageLoader />}>
+          {children}
+        </Suspense>
+      </AppShell>
+    </Guard>
   )
 }
 
@@ -41,15 +67,15 @@ export default function App() {
   const navigate  = useNavigate()
   const location  = useLocation()
 
-  // Prefetch on auth
+  // Prefetch global data on auth
   useEffect(() => {
     if (authed) {
-      fetchStats()
-      fetchModules()
+      fetchStats().catch(() => {})
+      fetchModules().catch(() => {})
     }
   }, [authed]) // eslint-disable-line
 
-  // Redirect to dashboard if already authed and on /
+  // Redirect root to dashboard
   useEffect(() => {
     if (authed && location.pathname === '/') navigate('/dashboard', { replace: true })
   }, [authed, location.pathname]) // eslint-disable-line
@@ -57,19 +83,31 @@ export default function App() {
   return (
     <div style={{ height: '100vh', overflow: 'hidden' }}>
       <Routes>
-        {/* Public */}
-        <Route path="/login" element={<Login />} />
+        {/* ── Public routes ── */}
+        <Route path="/login" element={
+          <Suspense fallback={<PageLoader />}>
+            <Login />
+          </Suspense>
+        } />
+        <Route path="/auth/callback" element={
+          <Suspense fallback={<PageLoader />}>
+            <AuthCallback />
+          </Suspense>
+        } />
 
-        {/* Protected */}
-        <Route path="/dashboard" element={<RequireAuth><Shell><Dashboard /></Shell></RequireAuth>} />
-        <Route path="/chat"      element={<RequireAuth><Shell><Chat      /></Shell></RequireAuth>} />
-        <Route path="/knowledge" element={<RequireAuth><Shell><Knowledge /></Shell></RequireAuth>} />
-        <Route path="/modules"   element={<RequireAuth><Shell><Modules   /></Shell></RequireAuth>} />
-        <Route path="/timeline"  element={<RequireAuth><Shell><Timeline  /></Shell></RequireAuth>} />
-        <Route path="/voice"     element={<RequireAuth><Shell><Voice     /></Shell></RequireAuth>} />
-        <Route path="/admin"     element={<RequireAuth><Shell><Admin     /></Shell></RequireAuth>} />
+        {/* ── Protected routes ── */}
+        <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
+        <Route path="/chat"      element={<Protected><Chat /></Protected>} />
+        <Route path="/knowledge" element={<Protected><Knowledge /></Protected>} />
+        <Route path="/modules"   element={<Protected><Modules /></Protected>} />
+        <Route path="/timeline"  element={<Protected><Timeline /></Protected>} />
+        <Route path="/voice"     element={<Protected><Voice /></Protected>} />
+        <Route path="/settings"  element={<Protected><Settings /></Protected>} />
 
-        {/* Fallback */}
+        {/* ── Admin-only routes ── */}
+        <Route path="/admin" element={<Protected adminOnly><Admin /></Protected>} />
+
+        {/* ── Fallback ── */}
         <Route path="*" element={<Navigate to={authed ? '/dashboard' : '/login'} replace />} />
       </Routes>
     </div>
