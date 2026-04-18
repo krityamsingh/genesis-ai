@@ -7,6 +7,11 @@
 #     automatically so the admin user always exists without requiring the
 #     operator to remember RUN_SEEDS=true on first deploy.
 #     Subsequent restarts skip seeding (idempotent seed_all).
+#   • Fallback password: if ADMIN_PASSWORD is not set in the environment
+#     (common on Railway/cloud platforms that don't read .env files),
+#     a safe built-in default is used so seeding never silently fails.
+#   • RESET_ADMIN_PASSWORD hook: set this env var to true in Railway Variables
+#     to force-rehash the admin password on next startup (fixes corrupted hashes).
 # =============================================================================
 
 from __future__ import annotations
@@ -38,6 +43,11 @@ log = logging.getLogger("api.main")
 
 FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 
+# Safe built-in fallback — used only when ADMIN_PASSWORD is not set at all.
+# Operators should always override this via Railway Variables.
+_FALLBACK_PASSWORD = "Genesis@2024!"
+_BLOCKED_PASSWORDS = {"", "changeme", "password"}
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -50,9 +60,19 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         log.error(f"DB init failed (non-fatal): {e}")
 
+    # ── Resolve admin password (with safe fallback) ───────────────────────────
+    # Cloud platforms (Railway, Render, Fly) inject env vars directly and do
+    # NOT read .env files. If ADMIN_PASSWORD is missing, use the fallback so
+    # seeding never silently fails.
+    admin_password = os.getenv("ADMIN_PASSWORD", "")
+    if admin_password in _BLOCKED_PASSWORDS:
+        log.warning(
+            "ADMIN_PASSWORD not set or insecure — using built-in fallback password. "
+            "Set ADMIN_PASSWORD in your Railway Variables to use your own password."
+        )
+        os.environ["ADMIN_PASSWORD"] = _FALLBACK_PASSWORD
+
     # ── Auto-seed if admin user doesn't exist ─────────────────────────────────
-    # This replaces the RUN_SEEDS=true mechanism so operators don't need to
-    # remember to set an env var on first deploy. seed_all() is idempotent.
     try:
         from database.db import db_session
         from database.models import User
@@ -68,6 +88,26 @@ async def lifespan(app: FastAPI):
             log.info("Admin user exists — skipping auto-seed.")
     except Exception as e:
         log.error(f"Auto-seed failed (non-fatal): {e}")
+
+    # ── Password reset hook ───────────────────────────────────────────────────
+    # Set RESET_ADMIN_PASSWORD=true in Railway Variables to force-rehash the
+    # admin password on next startup. Fixes corrupted/old bcrypt hashes.
+    # Remove the variable after the first successful deploy.
+    if os.getenv("RESET_ADMIN_PASSWORD", "false").lower() == "true":
+        try:
+            from database.db import db_session
+            from database.models import User
+            from security.password_hash import hash_password
+            new_pw = os.getenv("ADMIN_PASSWORD", _FALLBACK_PASSWORD)
+            with db_session() as db:
+                admin = db.query(User).filter_by(is_admin=True).first()
+                if admin:
+                    admin.hashed_pw = hash_password(new_pw)
+                    log.info(f"RESET_ADMIN_PASSWORD: rehashed password for '{admin.username}'")
+                else:
+                    log.warning("RESET_ADMIN_PASSWORD set but no admin user found.")
+        except Exception as e:
+            log.error(f"Password reset failed (non-fatal): {e}")
 
     # ── Manual seed override (kept for CI / reset scenarios) ──────────────────
     if os.getenv("RUN_SEEDS", "false").lower() == "true":
