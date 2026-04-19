@@ -15,12 +15,15 @@ from database.models_mongo import (
     User, LoginSession, Conversation, Message,
     ModuleState, PromptLog, OtpCode, RateLimit,
 )
+from database.training_models_mongo import TrainingJobDoc, TrainedModule
 
 log = logging.getLogger("database.mongo")
 
 _ALL_MODELS = [
     User, LoginSession, Conversation, Message,
     ModuleState, PromptLog, OtpCode, RateLimit,
+    # Training system (Section B + C)
+    TrainingJobDoc, TrainedModule,
 ]
 
 _client: AsyncIOMotorClient | None = None
