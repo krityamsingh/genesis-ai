@@ -1,11 +1,17 @@
-// ── hooks/useWebSocket.js ──────────────────────────────────────────────────────
+// ── hooks/useWebSocket.js (UPGRADED) ──────────────────────────────────────────
+// Bug fixes:
+//   • WS URL fallback now uses /ws/stream (was /ws/chat — backend never registered that)
+// New (Section D):
+//   • onModuleAdded callback — fired when backend broadcasts "module_added" event
+//     Training completion auto-triggers this, sidebar refreshes without reload
+//
 import { useState, useEffect, useRef, useCallback } from 'react'
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws/chat'
+const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws/stream'
 
-export default function useWebSocket() {
-  const [lastToken,    setLastToken]    = useState(null)
-  const [isConnected,  setIsConnected]  = useState(false)
+export default function useWebSocket({ onModuleAdded } = {}) {
+  const [lastToken,   setLastToken]   = useState(null)
+  const [isConnected, setIsConnected] = useState(false)
   const wsRef = useRef(null)
 
   const connect = useCallback(() => {
@@ -21,8 +27,15 @@ export default function useWebSocket() {
       }
 
       ws.onmessage = (e) => {
+        // Section D: handle server-push events from broadcast_to_all()
         try {
           const data = JSON.parse(e.data)
+
+          if (data.type === 'module_added') {
+            // New trained model is ready — notify caller (Sidebar refreshes)
+            if (onModuleAdded) onModuleAdded(data)
+            return
+          }
           if (data.type === 'token') {
             setLastToken(data.token)
           } else if (data.type === 'done') {
@@ -32,7 +45,7 @@ export default function useWebSocket() {
             setLastToken('[DONE]')
           }
         } catch {
-          // Raw text token (fallback)
+          // Raw text chunk (streaming fallback)
           setLastToken(e.data)
         }
       }
@@ -41,27 +54,24 @@ export default function useWebSocket() {
       ws.onclose = () => {
         setIsConnected(false)
         wsRef.current = null
-        // Reconnect after 3s
-        setTimeout(connect, 3000)
+        setTimeout(connect, 3000)   // auto-reconnect
       }
     } catch (err) {
       console.error('WebSocket connection failed:', err)
     }
-  }, [])
+  }, [onModuleAdded])
 
   useEffect(() => {
     connect()
-    return () => {
-      wsRef.current?.close()
-    }
+    return () => { wsRef.current?.close() }
   }, [connect])
 
-  const sendMessage = useCallback(({ message, module = 'auto' }) => {
+  const sendMessage = useCallback(({ action = 'think', payload }) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
       console.warn('WebSocket not connected')
       return
     }
-    wsRef.current.send(JSON.stringify({ message, module }))
+    wsRef.current.send(JSON.stringify({ action, payload }))
   }, [])
 
   return { sendMessage, lastToken, isConnected }
