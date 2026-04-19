@@ -15,18 +15,20 @@ from api.v1.auth_routes_oauth  import router as oauth_router
 from api.v1.auth_otp_routes    import router as otp_router
 from api.v1.conversation_routes import router as conv_router
 from api.v1.panel_routes       import router as panel_router
+from api.v1.training_routes    import router as training_router
 
 
 def register_routes(app: FastAPI):
     # v1 API routers
-    app.include_router(core_router,   prefix="/api/v1")
-    app.include_router(module_router, prefix="/api/v1")
-    app.include_router(admin_router,  prefix="/api/v1")
-    app.include_router(auth_router,   prefix="/api/v1")
-    app.include_router(oauth_router,  prefix="/api/v1")
-    app.include_router(otp_router,    prefix="/api/v1")
-    app.include_router(conv_router,   prefix="/api/v1")
-    app.include_router(panel_router,  prefix="/api/v1")
+    app.include_router(core_router,     prefix="/api/v1")
+    app.include_router(module_router,   prefix="/api/v1")
+    app.include_router(admin_router,    prefix="/api/v1")
+    app.include_router(auth_router,     prefix="/api/v1")
+    app.include_router(oauth_router,    prefix="/api/v1")
+    app.include_router(otp_router,      prefix="/api/v1")
+    app.include_router(conv_router,     prefix="/api/v1")
+    app.include_router(panel_router,    prefix="/api/v1")
+    app.include_router(training_router, prefix="/api/v1")  # Training Studio
 
     # Admin sub-app — must be mounted AFTER include_router calls
     from admin.backend.admin_api import admin_app
