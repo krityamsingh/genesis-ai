@@ -1,96 +1,97 @@
 # api/v1/module_routes.py
+# GENESIS — Module Routes (MongoDB/Beanie)
 #
-# FIX APPLIED:
-#   • Added GET  /modules/{module_id} — frontend calls moduleAPI.info(id)
-#   • Added PATCH /modules/{module_id} — frontend calls moduleAPI.toggle(id, state)
-#   Both routes returned 404 before this fix.
-# =============================================================================
+# CHANGES (MongoDB Rebuild):
+#   • Module enable/disable now persists in MongoDB (ModuleState collection)
+#     instead of in-memory dict — survives server restarts.
+#   • Falls back to in-memory registry if DB is unavailable.
 
 from __future__ import annotations
-
-from fastapi import APIRouter, Depends, HTTPException
+import logging
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from datetime import datetime
 
-from api.dependencies  import get_m1
-from api.schemas        import QueryRequest, TextResponse, OKResponse
+from api.dependencies import get_m1
+from api.schemas      import OKResponse
+
+log = logging.getLogger("api.v1.modules")
 
 router = APIRouter(prefix="/modules", tags=["modules"])
 
-# ── Module registry — single source of truth ──────────────────────────────────
+# ── Default module definitions (used to seed DB if states missing) ─────────────
 
-_MODULE_REGISTRY = {
-    "m1_self_learner":    {"id": "m1_self_learner",    "name": "Self Learner",       "description": "Ingests and learns from any source.", "enabled": True},
-    "m2_research_accel":  {"id": "m2_research_accel",  "name": "Research Accelerator","description": "Parses papers and generates hypotheses.", "enabled": False},
-    "m3_ai_builder":      {"id": "m3_ai_builder",      "name": "AI Builder",         "description": "Designs and generates ML architectures.", "enabled": False},
-    "m4_time_reconstruct":{"id": "m4_time_reconstruct","name": "Time Reconstructor", "description": "Reconstructs timelines and projects futures.", "enabled": False},
-    "m5_intuition_engine":{"id": "m5_intuition_engine","name": "Intuition Engine",   "description": "Bayesian reasoning and gap-filling.", "enabled": False},
-    "m6_reality_sim":     {"id": "m6_reality_sim",     "name": "Reality Simulator",  "description": "Runs simulations and analyses results.", "enabled": False},
+_DEFAULT_MODULES = {
+    "m1_self_learner":    {"name": "Self Learner",        "description": "Ingests and learns from any source.", "enabled": True},
+    "m2_research_accel":  {"name": "Research Accelerator","description": "Parses papers and generates hypotheses.", "enabled": False},
+    "m3_ai_builder":      {"name": "AI Builder",          "description": "Designs and generates ML architectures.", "enabled": False},
+    "m4_time_reconstruct":{"name": "Time Reconstructor",  "description": "Reconstructs timelines and projects futures.", "enabled": False},
+    "m5_intuition_engine":{"name": "Intuition Engine",    "description": "Bayesian reasoning and gap-filling.", "enabled": False},
+    "m6_reality_sim":     {"name": "Reality Simulator",   "description": "Runs simulations and analyses results.", "enabled": False},
 }
+
+
+async def _get_states() -> dict[str, dict]:
+    """Load module states from MongoDB, merging with default definitions."""
+    try:
+        from database.models_mongo import ModuleState
+        db_states = await ModuleState.find_all().to_list()
+        db_map = {s.module_key: s.enabled for s in db_states}
+    except Exception as e:
+        log.warning(f"Could not read ModuleState from DB: {e}")
+        db_map = {}
+
+    result = {}
+    for key, defn in _DEFAULT_MODULES.items():
+        result[key] = {
+            "id":          key,
+            "name":        defn["name"],
+            "description": defn["description"],
+            "enabled":     db_map.get(key, defn["enabled"]),
+        }
+    return result
 
 
 class ToggleBody(BaseModel):
     enabled: bool
 
 
-# ── Routes ────────────────────────────────────────────────────────────────────
-
 @router.get("/")
 async def list_modules():
-    """List all modules with their current enabled state."""
-    modules = list(_MODULE_REGISTRY.values())
+    """List all modules with their current enabled state (from MongoDB)."""
+    modules = list((await _get_states()).values())
     return {
         "modules": modules,
         "active":  [m["id"] for m in modules if m["enabled"]],
     }
 
 
-# FIX: GET /{module_id} — was missing, frontend calls moduleAPI.info(id)
 @router.get("/{module_id}")
 async def get_module(module_id: str):
     """Return metadata and status for a single module."""
-    module = _MODULE_REGISTRY.get(module_id)
-    if not module:
+    states = await _get_states()
+    if module_id not in states:
         raise HTTPException(status_code=404, detail=f"Module '{module_id}' not found.")
-    return module
+    return states[module_id]
 
 
-# FIX: PATCH /{module_id} — was missing, frontend calls moduleAPI.toggle(id, state)
-@router.patch("/{module_id}", response_model=OKResponse)
+@router.patch("/{module_id}")
 async def toggle_module(module_id: str, body: ToggleBody):
-    """Enable or disable a module by ID."""
-    module = _MODULE_REGISTRY.get(module_id)
-    if not module:
+    """Enable or disable a module. Persists to MongoDB."""
+    if module_id not in _DEFAULT_MODULES:
         raise HTTPException(status_code=404, detail=f"Module '{module_id}' not found.")
-    _MODULE_REGISTRY[module_id]["enabled"] = body.enabled
-    return OKResponse(message=f"Module '{module_id}' {'enabled' if body.enabled else 'disabled'}.")
+    try:
+        from database.models_mongo import ModuleState
+        state = await ModuleState.find_one(ModuleState.module_key == module_id)
+        if state:
+            state.enabled    = body.enabled
+            state.updated_at = datetime.utcnow()
+            await state.save()
+        else:
+            await ModuleState(module_key=module_id, enabled=body.enabled).insert()
+        log.info(f"Module {module_id} {'enabled' if body.enabled else 'disabled'}")
+    except Exception as e:
+        log.error(f"Failed to persist module state: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save module state.")
 
-
-# ── M1-specific routes ────────────────────────────────────────────────────────
-
-@router.post("/m1/connections", response_model=TextResponse)
-async def m1_connections(m1=Depends(get_m1)):
-    return TextResponse(result=m1.connections())
-
-
-@router.post("/m1/gaps", response_model=dict)
-async def m1_gaps(req: QueryRequest, m1=Depends(get_m1)):
-    gaps = m1.gaps(req.query)
-    return {"gaps": [{"topic": g.topic, "description": g.description,
-                      "suggested_resources": g.suggested_resources}
-                     for g in gaps]}
-
-
-@router.post("/m1/compare", response_model=TextResponse)
-async def m1_compare(topic_a: str, topic_b: str, m1=Depends(get_m1)):
-    return TextResponse(result=m1.compare(topic_a, topic_b))
-
-
-@router.post("/m1/study-plan", response_model=TextResponse)
-async def m1_study_plan(req: QueryRequest, duration: str = "2 weeks",
-                         m1=Depends(get_m1)):
-    return TextResponse(result=m1.study_plan(req.query, duration))
-
-
-@router.post("/m1/hypotheses", response_model=TextResponse)
-async def m1_hypotheses(req: QueryRequest, m1=Depends(get_m1)):
-    return TextResponse(result=m1.hypotheses(req.query))
+    return {"id": module_id, "enabled": body.enabled, "ok": True}
