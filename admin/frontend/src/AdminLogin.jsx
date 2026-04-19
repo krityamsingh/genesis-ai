@@ -1,25 +1,10 @@
-// admin/frontend/src/AdminLogin.jsx
-// GENESIS Admin — Login Page
-//
-// FIXES APPLIED:
-//   • ADMIN_API default changed from '/api/admin' to '/api/admin' — matches
-//     the mount point in api/routes.py (/api/admin, not /api/v1/admin).
-//   • Token stored in sessionStorage under TOKEN_KEY constant so AdminApp.jsx
-//     can reliably read it (both files now use the same key + storage type).
-//   • Added 401 token-expired handling: clears stale token on 401 so the
-//     login form re-appears cleanly instead of looping.
-//   • Credentials sent as JSON body (POST with { username, password }).
-//   • Loading state disables the submit button to prevent duplicate requests.
-//   • Rate-limit (429) and generic error messages handled.
-// =============================================================================
-
+// admin/frontend/src/AdminLogin.jsx — RESTYLED (Claude.ai white design)
+// Replaces dark neon login with clean white card matching main frontend.
 import React, { useState } from 'react'
 import axios from 'axios'
 
-// Matches the mount point in api/routes.py: app.mount("/api/admin", admin_app)
-// Override via VITE_ADMIN_API_URL in admin/frontend/.env if your setup differs.
 const ADMIN_API = import.meta.env.VITE_ADMIN_API_URL || '/api/admin'
-const TOKEN_KEY = 'genesis_admin_token'   // must match AdminApp.jsx
+const TOKEN_KEY = 'genesis_admin_token'
 
 export default function AdminLogin({ onLogin }) {
   const [username, setUsername] = useState('')
@@ -29,139 +14,122 @@ export default function AdminLogin({ onLogin }) {
 
   const submit = async (e) => {
     e.preventDefault()
-    setError('')
-    setLoading(true)
-
+    setError(''); setLoading(true)
     try {
       const { data } = await axios.post(
         `${ADMIN_API}/login`,
         { username, password },
         { headers: { 'Content-Type': 'application/json' } }
       )
-
-      // Store token in sessionStorage — AdminApp reads it from here
-      sessionStorage.setItem(TOKEN_KEY, data.access_token)
-      onLogin(data.access_token)
-
+      sessionStorage.setItem(TOKEN_KEY, data.token || data.access_token)
+      onLogin(data.token || data.access_token)
     } catch (err) {
       const status = err.response?.status
-      if (status === 429) {
-        setError('Too many attempts. Please wait 60 seconds before trying again.')
-      } else if (status === 401) {
-        // Clear any stale token so the app doesn't get stuck in a loop
-        sessionStorage.removeItem(TOKEN_KEY)
-        setError('Invalid credentials. Please check your username and password.')
-      } else if (status === 404) {
-        setError('Login endpoint not found. Check that the backend is running and VITE_ADMIN_API_URL is correct.')
-      } else {
-        setError(err.response?.data?.detail || 'Authentication failed. Please try again.')
-      }
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // ── Styles ────────────────────────────────────────────────────────────────
-  const s = {
-    page: {
-      minHeight: '100vh',
-      background: '#040913',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-    },
-    grid: {
-      position: 'fixed', inset: 0, opacity: 0.04,
-      backgroundImage:
-        'linear-gradient(#00f5ff 1px, transparent 1px), linear-gradient(90deg, #00f5ff 1px, transparent 1px)',
-      backgroundSize: '40px 40px',
-      pointerEvents: 'none',
-    },
-    card: {
-      position: 'relative', zIndex: 1,
-      width: '100%', maxWidth: 380, padding: 40,
-      background: 'rgba(10,20,40,0.9)',
-      border: '1px solid rgba(0,245,255,0.2)',
-      boxShadow: '0 0 60px rgba(0,245,255,0.08), inset 0 1px 0 rgba(0,245,255,0.1)',
-      borderRadius: 4,
-    },
-    label:      { fontSize: 11, color: '#00f5ff', letterSpacing: 4, marginBottom: 6, opacity: 0.7 },
-    title:      { fontSize: 28, fontWeight: 700, color: '#fff', letterSpacing: -1 },
-    subtitle:   { fontSize: 11, color: '#4a6080', marginTop: 4, letterSpacing: 2 },
-    divider:    { margin: '24px 0', borderColor: 'rgba(0,245,255,0.1)' },
-    fieldLabel: { display: 'block', fontSize: 11, color: '#4a6080', letterSpacing: 2, marginBottom: 6 },
-    input: {
-      width: '100%', background: 'rgba(0,20,40,0.8)',
-      border: '1px solid rgba(0,245,255,0.2)', borderRadius: 2,
-      color: '#a0d4e8', fontSize: 13, padding: '10px 12px',
-      outline: 'none', boxSizing: 'border-box',
-      fontFamily: 'inherit',
-    },
-    error: {
-      padding: '10px 14px', marginBottom: 16,
-      background: 'rgba(255,50,50,0.1)', border: '1px solid rgba(255,80,80,0.3)',
-      borderRadius: 2, color: '#ff8080', fontSize: 12,
-    },
-    button: {
-      width: '100%', padding: '12px 0',
-      background: loading ? 'rgba(0,245,255,0.05)' : 'rgba(0,245,255,0.1)',
-      border: '1px solid rgba(0,245,255,0.4)', borderRadius: 2,
-      color: loading ? '#4a6080' : '#00f5ff', fontSize: 12,
-      letterSpacing: 3, cursor: loading ? 'not-allowed' : 'pointer',
-      fontFamily: 'inherit', transition: 'all 0.2s',
-    },
+      const detail = err.response?.data?.detail
+      if (status === 429) setError('Too many attempts. Wait 60 seconds.')
+      else if (status === 401) setError('Invalid admin credentials.')
+      else setError(detail || 'Login failed. Check your credentials.')
+    } finally { setLoading(false) }
   }
 
   return (
-    <div style={s.page}>
-      <div style={s.grid} />
-
-      <div style={s.card}>
-        <div style={{ marginBottom: 32 }}>
-          <div style={s.label}>SYSTEM ACCESS</div>
-          <div style={s.title}>
-            GENESIS<span style={{ color: '#00f5ff' }}>_</span>
-          </div>
-          <div style={s.subtitle}>ADMIN CONSOLE v1.0</div>
+    <div style={{
+      minHeight: '100vh',
+      background: '#F4F4F5',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif',
+    }}>
+      <div style={{
+        background: '#fff', border: '1px solid #E5E7EB',
+        borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+        width: '100%', maxWidth: 400, padding: 40,
+      }}>
+        {/* Logo */}
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+          <div style={{
+            width: 44, height: 44, borderRadius: 10,
+            background: '#1A1A1A', color: '#fff',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 20, fontWeight: 700, marginBottom: 14,
+          }}>G</div>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1A1A1A', margin: 0 }}>
+            Genesis Admin
+          </h1>
+          <p style={{ fontSize: 13, color: '#6B7280', marginTop: 6 }}>
+            Sign in to your admin account
+          </p>
         </div>
 
-        <hr style={s.divider} />
-
-        {error && <div style={s.error}>{error}</div>}
+        {error && (
+          <div style={{
+            background: '#FEE2E2', color: '#991B1B',
+            borderRadius: 8, padding: '10px 14px',
+            fontSize: 13, marginBottom: 20,
+          }}>{error}</div>
+        )}
 
         <form onSubmit={submit}>
-          <div style={{ marginBottom: 16 }}>
-            <label style={s.fieldLabel}>IDENTIFIER</label>
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 13, fontWeight: 500, display: 'block', marginBottom: 6, color: '#374151' }}>
+              Username
+            </label>
             <input
               type="text"
+              value={username}
+              onChange={e => setUsername(e.target.value)}
               required
               autoFocus
-              autoComplete="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              style={s.input}
               placeholder="admin"
+              style={{
+                width: '100%', padding: '10px 14px', fontSize: 14,
+                border: '1px solid #E5E7EB', borderRadius: 10,
+                background: '#fff', color: '#1A1A1A', outline: 'none',
+                boxSizing: 'border-box',
+              }}
+              onFocus={e => e.target.style.borderColor = '#2563EB'}
+              onBlur={e => e.target.style.borderColor = '#E5E7EB'}
             />
           </div>
 
           <div style={{ marginBottom: 24 }}>
-            <label style={s.fieldLabel}>AUTH KEY</label>
+            <label style={{ fontSize: 13, fontWeight: 500, display: 'block', marginBottom: 6, color: '#374151' }}>
+              Password
+            </label>
             <input
               type="password"
-              required
-              autoComplete="current-password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              style={s.input}
-              placeholder="••••••••••••"
+              onChange={e => setPassword(e.target.value)}
+              required
+              placeholder="••••••••"
+              style={{
+                width: '100%', padding: '10px 14px', fontSize: 14,
+                border: '1px solid #E5E7EB', borderRadius: 10,
+                background: '#fff', color: '#1A1A1A', outline: 'none',
+                boxSizing: 'border-box',
+              }}
+              onFocus={e => e.target.style.borderColor = '#2563EB'}
+              onBlur={e => e.target.style.borderColor = '#E5E7EB'}
             />
           </div>
 
-          <button type="submit" disabled={loading} style={s.button}>
-            {loading ? 'AUTHENTICATING...' : 'AUTHENTICATE'}
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: '100%', padding: '11px 20px',
+              background: loading ? '#93C5FD' : '#2563EB',
+              color: '#fff', border: 'none', borderRadius: 10,
+              fontSize: 14, fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer',
+              transition: 'background 150ms',
+            }}
+          >
+            {loading ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
+
+        <p style={{ textAlign: 'center', fontSize: 12, color: '#9CA3AF', marginTop: 24 }}>
+          Admin access only · Genesis AI
+        </p>
       </div>
     </div>
   )

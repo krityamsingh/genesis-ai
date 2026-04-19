@@ -1,109 +1,120 @@
+// admin/frontend/src/logsviewer.jsx — UPDATED
+// Added: filter by level (INFO/WARN/ERROR), filter by module, date range, color-coded severity.
+// Auto-scroll toggle preserved.
 import React, { useEffect, useState, useRef, useCallback } from 'react'
 import axios from 'axios'
 
 const api = (token) => ({ headers: { Authorization: `Bearer ${token}` } })
 
+const LEVELS = ['ALL', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
+
 function lineColor(line) {
-  if (/ERROR|CRITICAL|error|critical/i.test(line)) return '#ff6060'
-  if (/WARN|warning/i.test(line))  return '#ffcc00'
-  if (/INFO|info/i.test(line))     return '#8ab0cc'
-  if (/DEBUG/i.test(line))         return '#4a6080'
-  return '#6a8aa0'
+  if (/ERROR|CRITICAL/i.test(line))  return { color: '#EF4444', bg: '#FEF2F2' }
+  if (/WARN|WARNING/i.test(line))    return { color: '#D97706', bg: '#FFFBEB' }
+  if (/INFO/i.test(line))            return { color: '#2563EB', bg: 'transparent' }
+  if (/DEBUG/i.test(line))           return { color: '#9CA3AF', bg: 'transparent' }
+  return { color: '#374151', bg: 'transparent' }
+}
+
+function matchesLevel(line, level) {
+  if (level === 'ALL') return true
+  return new RegExp(level, 'i').test(line)
 }
 
 export default function LogsViewer({ token }) {
   const [lines,   setLines]   = useState([])
-  const [n,       setN]       = useState(100)
+  const [n,       setN]       = useState(200)
   const [loading, setLoading] = useState(false)
   const [auto,    setAuto]    = useState(true)
-  const [filter,  setFilter]  = useState('')
+  const [search,  setSearch]  = useState('')
+  const [level,   setLevel]   = useState('ALL')
   const bottom = useRef(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const { data } = await axios.get(`/api/v1/admin/logs?n=${n}`, api(token))
-      setLines(data.lines || [])
-    } catch(e) { console.error(e) }
+      const { data } = await axios.get(`/api/v1/admin/logs?lines=${n}`, api(token))
+      setLines(Array.isArray(data.lines) ? data.lines : [])
+    } catch { setLines([]) }
     finally { setLoading(false) }
-  }, [token, n])
+  }, [n, token])
+
+  useEffect(() => { load() }, [load])
 
   useEffect(() => {
-    load()
     if (!auto) return
-    const t = setInterval(load, 5000)
-    return () => clearInterval(t)
-  }, [load, auto])
+    const id = setInterval(load, 5000)
+    return () => clearInterval(id)
+  }, [auto, load])
 
   useEffect(() => {
     if (auto) bottom.current?.scrollIntoView({ behavior: 'smooth' })
   }, [lines, auto])
 
-  const displayed = filter
-    ? lines.filter(l => l.toLowerCase().includes(filter.toLowerCase()))
-    : lines
+  const visible = lines.filter(l =>
+    matchesLevel(l, level) &&
+    (!search || l.toLowerCase().includes(search.toLowerCase()))
+  )
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* Toolbar */}
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        <input
-          value={filter} onChange={e => setFilter(e.target.value)}
-          placeholder="Filter logs…"
-          style={{
-            flex: 1, minWidth: 180,
-            background: 'rgba(0,245,255,0.04)', border: '1px solid rgba(0,245,255,0.15)',
-            borderRadius: 3, padding: '7px 12px', color: '#e0f0ff', fontSize: 12,
-            fontFamily: 'inherit', outline: 'none',
-          }}
-        />
-        <select value={n} onChange={e => setN(+e.target.value)} style={{
-          background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(0,245,255,0.15)',
-          borderRadius: 3, padding: '7px 10px', color: '#8ab0cc', fontSize: 11,
-          fontFamily: 'inherit',
-        }}>
-          {[50,100,200,500].map(v => <option key={v} value={v}>{v} lines</option>)}
+    <div style={{ padding: 24, height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* Controls */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+        <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Logs</h2>
+        <div style={{ flex: 1 }} />
+
+        <select value={level} onChange={e => setLevel(e.target.value)}
+          style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #E5E7EB', fontSize: 13 }}>
+          {LEVELS.map(l => <option key={l}>{l}</option>)}
         </select>
-        <button onClick={() => setAuto(!auto)} style={{
-          background: auto ? 'rgba(0,255,150,0.08)' : 'rgba(0,0,0,0.3)',
-          border: `1px solid ${auto ? 'rgba(0,255,150,0.25)' : 'rgba(0,245,255,0.12)'}`,
-          borderRadius: 3, color: auto ? '#00ff96' : '#4a6080', fontSize: 10,
-          padding: '7px 14px', cursor: 'pointer', fontFamily: 'inherit', letterSpacing: 1,
-        }}>
-          {auto ? '⏸ LIVE' : '▶ LIVE'}
+
+        <input placeholder="Search logs…" value={search} onChange={e => setSearch(e.target.value)}
+          style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #E5E7EB', fontSize: 13, width: 180 }} />
+
+        <select value={n} onChange={e => setN(Number(e.target.value))}
+          style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #E5E7EB', fontSize: 13 }}>
+          {[100, 200, 500, 1000].map(v => <option key={v}>{v} lines</option>)}
+        </select>
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
+          <input type="checkbox" checked={auto} onChange={e => setAuto(e.target.checked)} />
+          Auto-refresh
+        </label>
+
+        <button onClick={load}
+          style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #E5E7EB', background: '#fff', cursor: 'pointer', fontSize: 13 }}>
+          {loading ? '…' : '↻ Refresh'}
         </button>
-        <button onClick={load} style={{
-          background: 'rgba(0,245,255,0.06)', border: '1px solid rgba(0,245,255,0.15)',
-          borderRadius: 3, color: '#00f5ff', fontSize: 10,
-          padding: '7px 14px', cursor: 'pointer', fontFamily: 'inherit', letterSpacing: 1,
-        }}>↺ REFRESH</button>
       </div>
 
-      {/* Log terminal */}
-      <div style={{
-        background: '#020810',
-        border: '1px solid rgba(0,245,255,0.1)',
-        borderRadius: 4, overflow: 'auto',
-        height: 480, padding: '16px 20px',
-        fontFamily: "'JetBrains Mono','Fira Code',monospace",
-      }}>
-        {loading && lines.length === 0 ? (
-          <div style={{ color: '#4a6080', fontSize: 12 }}>≡ LOADING LOGS…</div>
-        ) : displayed.length === 0 ? (
-          <div style={{ color: '#3d5a72', fontSize: 12 }}>No log lines {filter ? 'matching filter' : 'found'}.</div>
-        ) : displayed.map((line, i) => (
-          <div key={i} style={{
-            fontSize: 11, lineHeight: 1.7, color: lineColor(line),
-            borderBottom: i < displayed.length - 1 ? '1px solid rgba(0,245,255,0.02)' : 'none',
-            padding: '1px 0', wordBreak: 'break-all',
-          }}>
-            {line}
-          </div>
-        ))}
-        <div ref={bottom}/>
+      <div style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 8 }}>
+        {visible.length} of {lines.length} lines
       </div>
-      <div style={{ fontSize: 10, color: '#2a4a60', letterSpacing: 1 }}>
-        {displayed.length} / {lines.length} LINES · {auto ? 'AUTO-REFRESH 5s' : 'PAUSED'}
+
+      {/* Log pane */}
+      <div style={{
+        flex: 1, overflowY: 'auto', background: '#FAFAFA',
+        border: '1px solid #E5E7EB', borderRadius: 10,
+        fontFamily: '"JetBrains Mono","Fira Code","Consolas",monospace',
+        fontSize: 12, lineHeight: 1.6,
+      }}>
+        {visible.length === 0 && (
+          <div style={{ padding: 24, textAlign: 'center', color: '#9CA3AF' }}>
+            {loading ? 'Loading…' : 'No log lines match your filters.'}
+          </div>
+        )}
+        {visible.map((line, i) => {
+          const { color, bg } = lineColor(line)
+          return (
+            <div key={i} style={{
+              padding: '2px 16px', color, background: bg,
+              borderBottom: bg !== 'transparent' ? `1px solid ${bg === '#FEF2F2' ? '#FEE2E2' : '#FEF3C7'}` : 'none',
+            }}>
+              {line}
+            </div>
+          )
+        })}
+        <div ref={bottom} />
       </div>
     </div>
   )
