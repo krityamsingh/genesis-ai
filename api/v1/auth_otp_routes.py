@@ -235,7 +235,6 @@ async def setup_name(
         raise HTTPException(status_code=401, detail="Missing Authorization header.")
 
     try:
-        from security.jwt_handler import decode_token
         claims = decode_token(token)
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e))
