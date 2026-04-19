@@ -32,7 +32,7 @@ const useGenesisStore = create(
         // Persist tokens
         localStorage.setItem('genesis_token', access_token)
         if (refresh_token) {
-          localStorage.setItem('genesis_refresh_token', refresh_token)
+          localStorage.setItem('genesis_refresh', refresh_token)
         }
 
         // FIX: backend returns no `user` object — fetch it separately from /auth/me
@@ -53,7 +53,7 @@ const useGenesisStore = create(
       logout: () => {
         apiLogout().catch(() => {}) // best-effort server logout
         localStorage.removeItem('genesis_token')
-        localStorage.removeItem('genesis_refresh_token')
+        localStorage.removeItem('genesis_refresh')
         set({ token: null, user: null, authed: false, messages: [], stats: null })
       },
 
