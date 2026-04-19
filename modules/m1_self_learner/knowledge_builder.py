@@ -241,7 +241,7 @@ class KnowledgeBuilder:
             temperature=0.4,
         )
         try:
-            import re, json
+            import re
             clean = re.sub(r"```(?:json)?", "", raw).strip()
             items = json.loads(clean)
             return [KnowledgeGap(**g) for g in items]
