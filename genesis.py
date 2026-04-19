@@ -74,7 +74,7 @@ class Genesis:
         print("  GENESIS ready")
         print(f"  engine  : {self.engine.model_id}")
         print(f"  kg      : {self.kg}")
-        print(f"  modules : m1 (self-learner)")
+        print("  modules : m1 (self-learner)")
         print("=" * 55)
 
     # ── M1 shortcuts ──────────────────────────────────────
