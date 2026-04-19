@@ -116,3 +116,18 @@ export const voiceAPI = {
     return api.post('/core/transcribe', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
   },
 }
+
+// ── Training Studio (Section B+C+D) ──────────────────────────────────────────
+export const trainingAPI = {
+  // Start a training job — multipart/form-data (domain, name, dataset file)
+  startJob:      (formData)     => api.post('/training/jobs', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+  listJobs:      ()             => api.get('/training/jobs'),
+  getJob:        (jobId)        => api.get(`/training/jobs/${jobId}`),
+  cancelJob:     (jobId)        => api.delete(`/training/jobs/${jobId}`),
+  listDomains:   ()             => api.get('/training/domains'),
+  // Trained modules
+  listTrained:   ()             => api.get('/modules/trained'),
+  toggleTrained: (key)          => api.patch(`/modules/trained/${key}/toggle`),
+}
