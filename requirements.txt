@@ -1,11 +1,7 @@
 # =============================================================================
-# GENESIS — Railway requirements (API-only, no training deps)
-#
-# torch / transformers / peft / trl / bitsandbytes are EXCLUDED:
-#   • They add ~3 GB to the image
-#   • Railway build will timeout or OOM without a GPU builder
-#   • Training tasks require a dedicated GPU worker — not Railway free/hobby tier
-#   • Use requirements.txt locally or on a GPU machine for training
+# GENESIS — Python Requirements (MongoDB Edition)
+# Removed: sqlalchemy, alembic, aiosqlite, psycopg2-binary, redis
+# Added:   motor, beanie, pymongo, authlib, itsdangerous, twilio
 # =============================================================================
 
 # ── Web Framework ─────────────────────────────────────────────────────────────
@@ -18,10 +14,18 @@ python-multipart==0.0.18
 pydantic==2.10.4
 pydantic-settings==2.7.0
 
-# ── Database ──────────────────────────────────────────────────────────────────
-sqlalchemy==2.0.36
-alembic==1.14.0
-psycopg2-binary==2.9.10
+# ── Database — MongoDB (replaces SQLite/Redis/SQLAlchemy/Alembic) ─────────────
+motor>=3.3.0
+beanie>=1.25.0
+pymongo>=4.6.0
+
+# ── Auth — OAuth + Session ────────────────────────────────────────────────────
+authlib>=1.3.0
+httpx>=0.28.1
+itsdangerous>=2.1.0
+
+# ── SMS OTP ───────────────────────────────────────────────────────────────────
+twilio>=8.10.0
 
 # ── AI / HuggingFace (primary engine) ────────────────────────────────────────
 huggingface-hub==0.27.0
@@ -36,7 +40,6 @@ passlib[bcrypt]==1.7.4
 
 # ── HTTP / Ingestion ──────────────────────────────────────────────────────────
 requests==2.32.3
-httpx==0.28.1
 PyPDF2==3.0.1
 
 # ── Config / Utils ────────────────────────────────────────────────────────────
@@ -45,7 +48,6 @@ pyyaml==6.0.2
 
 # ── Task Queue ────────────────────────────────────────────────────────────────
 celery==5.4.0
-redis==5.2.1
 
 # ── TTS ───────────────────────────────────────────────────────────────────────
 gtts==2.5.4
