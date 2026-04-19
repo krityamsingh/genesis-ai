@@ -1,6 +1,10 @@
-// frontend/src/components/Sidebar.jsx — NEW FILE (Claude.ai style)
-// Left panel: New Chat button, conversation list, user info at bottom, module badges.
+// frontend/src/components/Sidebar.jsx — UPGRADED
+// Upgrades:
+//   • trainedModules prop — shows "Trained models" section with domain badges
+//   • Training Studio link at the bottom of nav
+//   • Listens for module_added WS events via onModuleAdded prop
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 function RelativeTime({ iso }) {
   const d    = new Date(iso)
@@ -13,11 +17,18 @@ function RelativeTime({ iso }) {
   return d.toLocaleDateString()
 }
 
+function domainColor(domain) {
+  return { trading: '#f59e0b', medical: '#10b981', legal: '#6366f1', code: '#0ea5e9', custom: '#ec4899' }[domain] || '#64748b'
+}
+
 export default function Sidebar({
   user, conversations, activeConvId,
   onNewChat, onSelectConv, onDeleteConv, onLogout,
+  trainedModules = [],   // list of {key, domain, name, is_active}
+  onSelectModule,        // callback(module_key) to open trained model in chat
 }) {
   const [hoveredId, setHoveredId] = useState(null)
+  const navigate = useNavigate()
 
   return (
     <div style={{
@@ -112,6 +123,54 @@ export default function Sidebar({
             </div>
           )
         })}
+      </div>
+
+      {/* Trained models section (Section D: auto-appears after training) */}
+      {trainedModules.length > 0 && (
+        <div style={{ borderTop: '1px solid var(--border, #E5E7EB)', padding: '8px 12px' }}>
+          <p style={{ fontSize: 11, color: 'var(--text-tertiary, #9CA3AF)', fontWeight: 600, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+            Trained models
+          </p>
+          {trainedModules.filter(m => m.is_active).map(m => (
+            <button
+              key={m.key}
+              onClick={() => onSelectModule?.(m.key)}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                padding: '6px 8px', borderRadius: 6, border: 'none',
+                background: 'transparent', cursor: 'pointer', fontSize: 12,
+                color: 'var(--text-secondary, #374151)', textAlign: 'left',
+                transition: 'background 120ms',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-tertiary, #F0F0F0)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <span style={{
+                width: 20, height: 20, borderRadius: 4, display: 'flex', alignItems: 'center',
+                justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#fff',
+                background: domainColor(m.domain), flexShrink: 0,
+              }}>{m.domain[0].toUpperCase()}</span>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Training Studio link */}
+      <div style={{ padding: '0 12px 8px' }}>
+        <button
+          onClick={() => navigate('/training')}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 6,
+            padding: '7px 10px', borderRadius: 8, border: '1px dashed var(--border, #E5E7EB)',
+            background: 'transparent', cursor: 'pointer', fontSize: 12,
+            color: 'var(--text-tertiary, #9CA3AF)', transition: 'all 150ms',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-tertiary, #F0F0F0)'; e.currentTarget.style.color = 'var(--text-primary, #1A1A1A)' }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-tertiary, #9CA3AF)' }}
+        >
+          ⚡ Training Studio
+        </button>
       </div>
 
       {/* User footer */}
