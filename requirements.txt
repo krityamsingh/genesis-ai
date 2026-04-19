@@ -1,7 +1,6 @@
 # =============================================================================
-# GENESIS — Python Requirements (MongoDB Edition)
-# Removed: sqlalchemy, alembic, aiosqlite, psycopg2-binary, redis
-# Added:   motor, beanie, pymongo, authlib, itsdangerous, twilio
+# GENESIS — Railway requirements (API-only, no training deps)
+# UPDATED: Added MongoDB stack + itsdangerous/authlib. Removed SQLAlchemy/Redis.
 # =============================================================================
 
 # ── Web Framework ─────────────────────────────────────────────────────────────
@@ -9,28 +8,29 @@ fastapi==0.115.6
 uvicorn[standard]==0.32.1
 starlette==0.41.3
 python-multipart==0.0.18
+bcrypt==4.0.1
 
 # ── Data Validation ───────────────────────────────────────────────────────────
 pydantic==2.10.4
 pydantic-settings==2.7.0
 
-# ── Database — MongoDB (replaces SQLite/Redis/SQLAlchemy/Alembic) ─────────────
+# ── Database — MongoDB (replaces SQLAlchemy + Redis) ─────────────────────────
 motor>=3.3.0
 beanie>=1.25.0
 pymongo>=4.6.0
 
-# ── Auth — OAuth + Session ────────────────────────────────────────────────────
+# ── Auth / OAuth / Session ────────────────────────────────────────────────────
 authlib>=1.3.0
-httpx>=0.28.1
 itsdangerous>=2.1.0
+httpx>=0.28.1
 
 # ── SMS OTP ───────────────────────────────────────────────────────────────────
 twilio>=8.10.0
 
-# ── AI / HuggingFace (primary engine) ────────────────────────────────────────
+# ── AI / HuggingFace ─────────────────────────────────────────────────────────
 huggingface-hub==0.27.0
 
-# ── Multi-Provider AI Callers ─────────────────────────────────────────────────
+# ── Multi-Provider AI ─────────────────────────────────────────────────────────
 google-generativeai==0.8.3
 openai==1.58.1
 
