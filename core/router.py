@@ -59,6 +59,22 @@ _INTENT_RULES: list[tuple[list[str], str]] = [
 # Router
 # ============================================================
 
+
+# ── Domain intent keywords (for trained modules) ──────────────────────────────
+# When a trained module is registered, its domain keywords are prepended to
+# _INTENT_RULES so the router auto-routes relevant queries to it.
+_DOMAIN_INTENT_KEYWORDS: dict[str, list[str]] = {
+    "trading":  ["trade", "stock", "market", "forex", "crypto", "invest",
+                 "portfolio", "candlestick", "technical analysis", "bull", "bear"],
+    "medical":  ["diagnosis", "symptom", "patient", "clinical", "drug",
+                 "medication", "disease", "treatment", "medical"],
+    "legal":    ["contract", "law", "legal", "clause", "jurisdiction",
+                 "liability", "statute", "court", "case"],
+    "code":     ["debug", "function", "class", "algorithm", "refactor",
+                 "optimize", "unit test", "code review"],
+    "custom":   [],
+}
+
 class Router:
     """
     GENESIS module router.
@@ -94,6 +110,20 @@ class Router:
         """Register a module under a key."""
         self.modules[name] = module
         print(f"[Router] Registered module: {name}")
+
+    def register_module(self, key: str, module: Any):
+        """
+        Register a trained module dynamically (Section C).
+        Adds domain keywords to _INTENT_RULES — no restart needed.
+        Called by DynamicModuleLoader on startup and on module_added events.
+        """
+        self.modules[key] = module
+        domain = getattr(module, "domain", None)
+        if domain and domain in _DOMAIN_INTENT_KEYWORDS:
+            kws = _DOMAIN_INTENT_KEYWORDS[domain]
+            if kws:
+                _INTENT_RULES.insert(0, (kws, key))
+        print(f"[Router] Live-registered trained module: {key} (domain={domain})")
 
     # ── route ─────────────────────────────────────────────
 
