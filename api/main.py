@@ -1,17 +1,15 @@
 # api/main.py
 # GENESIS — FastAPI Application Factory
 #
-# FIXES APPLIED:
-#   • init_singletons(app) called during lifespan startup (was missing before).
-#   • Auto-seed: if the users table is empty on startup, seed_all() runs
-#     automatically so the admin user always exists without requiring the
-#     operator to remember RUN_SEEDS=true on first deploy.
-#     Subsequent restarts skip seeding (idempotent seed_all).
-#   • Fallback password: if ADMIN_PASSWORD is not set in the environment
-#     (common on Railway/cloud platforms that don't read .env files),
-#     a safe built-in default is used so seeding never silently fails.
-#   • RESET_ADMIN_PASSWORD hook: set this env var to true in Railway Variables
-#     to force-rehash the admin password on next startup (fixes corrupted hashes).
+# CHANGES (MongoDB Rebuild):
+#   • init_db() → connect_db() (Motor/Beanie)
+#   • Auto-seed uses MongoDB Beanie queries (no SQLAlchemy)
+#   • SessionMiddleware added for Google OAuth state
+#   • OTP auth router registered
+#   • Conversation router registered
+#   • All SQLAlchemy/Alembic imports removed
+#   • close_db() called on shutdown
+#   • module_loader.load_from_registry() called at startup
 # =============================================================================
 
 from __future__ import annotations
@@ -22,13 +20,13 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
-
 load_dotenv()
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 
 from security.cors_config  import CORS_SETTINGS
 from shared.exceptions     import GenesisError
@@ -36,15 +34,12 @@ from api.error_handlers    import genesis_exception_handler, generic_exception_h
 from api.middleware        import logging_middleware
 from api.routes            import register_routes
 from api.websocket         import ws_stream_endpoint
-from database.db           import init_db
+from database.mongo        import connect_db, close_db
 from api.dependencies      import init_singletons
 
 log = logging.getLogger("api.main")
 
-FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
-
-# Safe built-in fallback — used only when ADMIN_PASSWORD is not set at all.
-# Operators should always override this via Railway Variables.
+FRONTEND_DIST      = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 _FALLBACK_PASSWORD = "Genesis@2024!"
 _BLOCKED_PASSWORDS = {"", "changeme", "password"}
 
@@ -53,132 +48,120 @@ _BLOCKED_PASSWORDS = {"", "changeme", "password"}
 async def lifespan(app: FastAPI):
     """Startup / shutdown lifecycle handler."""
 
-    # ── Database ──────────────────────────────────────────────────────────────
+    # MongoDB
     try:
-        init_db()
-        log.info("Database initialised.")
+        await connect_db()
+        log.info("MongoDB connected and Beanie initialised.")
     except Exception as e:
-        log.error(f"DB init failed (non-fatal): {e}")
+        log.error(f"MongoDB init failed (non-fatal): {e}")
 
-    # ── Resolve admin password (with safe fallback) ───────────────────────────
-    # Cloud platforms (Railway, Render, Fly) inject env vars directly and do
-    # NOT read .env files. If ADMIN_PASSWORD is missing, use the fallback so
-    # seeding never silently fails.
+    # Admin password safety
     admin_password = os.getenv("ADMIN_PASSWORD", "")
     if admin_password in _BLOCKED_PASSWORDS:
-        log.warning(
-            "ADMIN_PASSWORD not set or insecure — using built-in fallback password. "
-            "Set ADMIN_PASSWORD in your Railway Variables to use your own password."
-        )
+        log.warning("ADMIN_PASSWORD not set or insecure — using built-in fallback.")
         os.environ["ADMIN_PASSWORD"] = _FALLBACK_PASSWORD
 
-    # ── Auto-seed if admin user doesn't exist ─────────────────────────────────
+    # Auto-seed
     try:
-        from database.db import db_session
-        from database.models import User
-        with db_session() as db:
-            has_admin = db.query(User).filter_by(is_admin=True).first()
-
+        from database.models_mongo import User
+        has_admin = await User.find_one(User.is_admin == True)
         if not has_admin:
             log.info("No admin user found — running seeds automatically.")
-            from database.seeds import seed_all
-            result = seed_all()
+            from database.seeds_mongo import seed_all
+            result = await seed_all()
             log.info(f"Auto-seed complete: {result}")
         else:
             log.info("Admin user exists — skipping auto-seed.")
     except Exception as e:
         log.error(f"Auto-seed failed (non-fatal): {e}")
 
-    # ── Password reset hook ───────────────────────────────────────────────────
-    # Set RESET_ADMIN_PASSWORD=true in Railway Variables to force-rehash the
-    # admin password on next startup. Fixes corrupted/old bcrypt hashes.
-    # Remove the variable after the first successful deploy.
+    # Password reset hook
     if os.getenv("RESET_ADMIN_PASSWORD", "false").lower() == "true":
         try:
-            from database.db import db_session
-            from database.models import User
+            from database.models_mongo import User
             from security.password_hash import hash_password
-            new_pw = os.getenv("ADMIN_PASSWORD", _FALLBACK_PASSWORD)
-            with db_session() as db:
-                admin = db.query(User).filter_by(is_admin=True).first()
-                if admin:
-                    admin.hashed_pw = hash_password(new_pw)
-                    log.info(f"RESET_ADMIN_PASSWORD: rehashed password for '{admin.username}'")
-                else:
-                    log.warning("RESET_ADMIN_PASSWORD set but no admin user found.")
+            new_pw    = os.getenv("ADMIN_PASSWORD", _FALLBACK_PASSWORD)
+            admin_usr = os.getenv("ADMIN_USERNAME", "admin")
+            admin = await User.find_one(User.username == admin_usr)
+            if admin:
+                admin.hashed_pw = hash_password(new_pw)
+                await admin.save()
+                log.info(f"RESET_ADMIN_PASSWORD: rehashed for '{admin.username}'")
         except Exception as e:
             log.error(f"Password reset failed (non-fatal): {e}")
 
-    # ── Manual seed override (kept for CI / reset scenarios) ──────────────────
+    # Manual seed override
     if os.getenv("RUN_SEEDS", "false").lower() == "true":
         try:
-            from database.seeds import seed_all
-            seed_all()
-            log.info("Manual seed (RUN_SEEDS=true) complete.")
+            from database.seeds_mongo import seed_all
+            await seed_all()
+            log.info("Manual seed complete.")
         except Exception as e:
             log.error(f"Manual seed failed (non-fatal): {e}")
 
-    # ── Singletons ────────────────────────────────────────────────────────────
+    # Singletons
     try:
         init_singletons(app)
         log.info("Singletons initialised.")
     except Exception as e:
         log.error(f"Singleton init failed: {e}")
 
+    # Load trained modules from registry + DB
+    try:
+        await app.state.module_loader.load_from_registry()
+        log.info("Dynamic module loader: trained modules loaded.")
+    except Exception as e:
+        log.warning(f"Module loader failed (non-fatal): {e}")
+
     log.info(
-        f"GENESIS starting | "
-        f"model={os.getenv('GEMMA_MODEL', 'default')} | "
-        f"db={'postgres' if 'postgresql' in os.getenv('DATABASE_URL', '') else 'sqlite'} | "
-        f"redis={'yes' if os.getenv('REDIS_URL') else 'no (in-memory fallback)'} | "
-        f"port={os.getenv('PORT', '8080')}"
+        f"GENESIS starting | model={os.getenv('GEMMA_MODEL', 'default')} | "
+        f"db=mongodb | port={os.getenv('PORT', '8080')}"
     )
 
     yield
+
+    await close_db()
     log.info("GENESIS shutting down.")
 
 
 def create_app() -> FastAPI:
     app = FastAPI(
         title="GENESIS API",
-        version="1.0.0",
-        description="GENESIS AI — Self-Learning System",
+        version="2.0.0",
+        description="GENESIS AI — Self-Learning System (MongoDB Edition)",
         lifespan=lifespan,
     )
 
-    # CORS
     app.add_middleware(CORSMiddleware, **CORS_SETTINGS)
 
-    # Logging middleware
+    # SessionMiddleware for Google OAuth (must be before routes)
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=os.getenv("SESSION_SECRET_KEY", "dev-fallback-change-in-prod"),
+        same_site="lax",
+        https_only=os.getenv("ENV", "development") == "production",
+    )
+
     from starlette.middleware.base import BaseHTTPMiddleware
     app.add_middleware(BaseHTTPMiddleware, dispatch=logging_middleware)
 
-    # Error handlers
     app.add_exception_handler(GenesisError, genesis_exception_handler)
     app.add_exception_handler(Exception,    generic_exception_handler)
 
-    # API routes (includes admin sub-app mount)
     register_routes(app)
 
-    # WebSocket
     app.add_api_websocket_route("/ws/stream", ws_stream_endpoint)
 
-    # Health check (no auth)
     @app.get("/health", include_in_schema=False)
     async def health():
-        return {"status": "ok", "service": "genesis-api"}
+        return {"status": "ok", "service": "genesis-api", "db": "mongodb"}
 
     @app.get("/", include_in_schema=False)
     async def root():
         if FRONTEND_DIST.exists():
             return FileResponse(str(FRONTEND_DIST / "index.html"))
-        return {
-            "message": "GENESIS API is running",
-            "docs":    "/docs",
-            "health":  "/health",
-            "note":    "Run frontend via: cd frontend && npm run dev",
-        }
+        return {"message": "GENESIS API is running", "docs": "/docs", "health": "/health"}
 
-    # Frontend static files (only if dist was built)
     if FRONTEND_DIST.exists():
         assets_dir = FRONTEND_DIST / "assets"
         if assets_dir.exists():

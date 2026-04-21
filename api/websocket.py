@@ -2,15 +2,14 @@
 # GENESIS — Streaming WebSocket Endpoint
 #
 # Fixes applied:
-#   • Authentication: token required as query param on connect
-#     (?token=<jwt>) — connection rejected with code 4001 if missing/invalid
+#   • Authentication: token required as query param on connect (?token=<jwt>)
 #   • Per-user rate limiting on the WebSocket connection
-#   • think_stream errors are caught and sent as [ERROR] frames
-#     instead of crashing the handler and closing the connection
-#   • learn result is safely serialized before send_json
+#   • think_stream errors caught and sent as [ERROR] frames
+#   • learn result safely serialized before send_json
 #   • Payload size limit (prevents memory bombs)
-#   • Structured [DONE] / [ERROR] protocol so clients can reliably detect end
-#   • User ID extracted from token and logged for audit trail
+#   • Structured [DONE] / [ERROR] protocol
+#   • _ConnectionManager class added for server-push broadcasts
+#   • broadcast_to_all() helper for module_added events
 # =============================================================================
 
 from __future__ import annotations
@@ -27,17 +26,12 @@ from security.rate_limiter     import check_rate_limit, RateLimitError
 
 log = logging.getLogger("api.websocket")
 
-# Maximum payload size in bytes (50KB). Reject anything larger.
 _MAX_PAYLOAD_BYTES = 50_000
 
 
 # ── Serialization helper ──────────────────────────────────────────────────────
 
 def _safe_serialize(obj: Any) -> Any:
-    """
-    Convert any object to a JSON-serializable structure.
-    Handles dataclasses, objects with to_dict(), and plain dicts.
-    """
     if isinstance(obj, dict):
         return obj
     if hasattr(obj, "to_dict"):
@@ -47,9 +41,41 @@ def _safe_serialize(obj: Any) -> Any:
         return dataclasses.asdict(obj)
     if hasattr(obj, "__dict__"):
         return {k: v for k, v in obj.__dict__.items() if not k.startswith("_")}
-    # Last resort — let json handle it or raise a clear error
-    json.dumps(obj)   # will raise TypeError if not serializable
+    json.dumps(obj)
     return obj
+
+
+# ── Connection manager (for server-push broadcasts) ──────────────────────────
+
+class _ConnectionManager:
+    """Tracks all live WebSocket connections for server-push broadcasts."""
+
+    def __init__(self):
+        self._connections: dict[str, "WebSocket"] = {}
+
+    def add(self, user_id: str, ws: "WebSocket"):
+        self._connections[user_id] = ws
+
+    def remove(self, user_id: str):
+        self._connections.pop(user_id, None)
+
+    async def broadcast(self, message: dict):
+        dead = []
+        for uid, ws in list(self._connections.items()):
+            try:
+                await ws.send_json(message)
+            except Exception:
+                dead.append(uid)
+        for uid in dead:
+            self.remove(uid)
+
+
+_manager = _ConnectionManager()
+
+
+async def broadcast_to_all(message: dict):
+    """Broadcast a message to all connected WebSocket clients."""
+    await _manager.broadcast(message)
 
 
 # ── WebSocket handler ─────────────────────────────────────────────────────────
@@ -97,6 +123,7 @@ async def ws_stream_endpoint(websocket: WebSocket) -> None:
 
     # ── 3. Accept connection ──────────────────────────────────────────────────
     await websocket.accept()
+    _manager.add(user_id, websocket)
     log.info(f"WebSocket connected: user={user_id} admin={is_admin} ip={websocket.client.host if websocket.client else 'unknown'}")
 
     engine = get_engine()
@@ -105,7 +132,6 @@ async def ws_stream_endpoint(websocket: WebSocket) -> None:
     # ── 4. Message loop ───────────────────────────────────────────────────────
     try:
         while True:
-            # Receive raw bytes to check size before parsing
             raw = await websocket.receive_text()
 
             if len(raw.encode()) > _MAX_PAYLOAD_BYTES:
@@ -125,7 +151,6 @@ async def ws_stream_endpoint(websocket: WebSocket) -> None:
                 await websocket.send_text("[ERROR] Empty payload")
                 continue
 
-            # ── Per-user message rate limit (60 messages per minute) ─────────
             msg_key = f"ws:msg:{user_id}"
             try:
                 check_rate_limit(msg_key, limit=60)
@@ -133,7 +158,6 @@ async def ws_stream_endpoint(websocket: WebSocket) -> None:
                 await websocket.send_text("[ERROR] Rate limit exceeded. Slow down.")
                 continue
 
-            # ── Handle actions ────────────────────────────────────────────────
             if action == "think":
                 log.debug(f"ws:think user={user_id} payload_len={len(payload)}")
                 try:
@@ -169,3 +193,6 @@ async def ws_stream_endpoint(websocket: WebSocket) -> None:
             await websocket.close(code=1011, reason="Internal server error")
         except Exception:
             pass
+
+    finally:
+        _manager.remove(user_id)

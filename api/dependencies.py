@@ -3,14 +3,10 @@
 #
 # Fixes applied:
 #   • Singletons now live on app.state (set during lifespan) instead of
-#     @lru_cache module globals. This means:
-#       - Proper teardown on shutdown
-#       - No stale cached objects if env vars change between test runs
-#       - Works correctly with FastAPI's dependency injection across workers
-#   • Backward-compatible: if called outside a Request context (e.g. from
-#     Celery tasks), falls back to creating the object directly — this covers
-#     the transition period until all Celery callers are updated
+#     @lru_cache module globals.
 #   • get_token_from_header promoted to a proper FastAPI Header dependency
+#   • TrainingEngine and DynamicModuleLoader added to init_singletons()
+#   • require_auth_dep added for protected route dependencies
 # =============================================================================
 
 from __future__ import annotations
@@ -27,18 +23,6 @@ log = logging.getLogger("api.dependencies")
 # ── Lifespan initializer — call this from api/main.py lifespan ───────────────
 
 def init_singletons(app) -> None:
-    """
-    Create all singletons and attach them to app.state.
-    Call once from the FastAPI lifespan context manager.
-
-    Usage in api/main.py:
-        from api.dependencies import init_singletons
-
-        @asynccontextmanager
-        async def lifespan(app):
-            init_singletons(app)
-            yield
-    """
     from core.gemma_engine import GemmaEngine
     from core.knowledge_graph import KnowledgeGraph
     from core.memory_manager import MemoryManager
@@ -61,12 +45,20 @@ def init_singletons(app) -> None:
     r.register("m1", app.state.m1.ask)
     app.state.router = r
 
+    # Training Engine
+    from core.training_engine import TrainingEngine
+    app.state.training_engine = TrainingEngine()
+
+    # DynamicModuleLoader — wires Router to auto-load trained models
+    from core.module_loader import DynamicModuleLoader
+    loader = DynamicModuleLoader.instance()
+    loader.set_router(r)
+    app.state.module_loader = loader
+
     log.info("Singletons initialised.")
 
 
 # ── Request-scoped dependency getters ────────────────────────────────────────
-# These are the FastAPI Depends() targets. They pull from app.state which was
-# populated by init_singletons() above.
 
 def get_engine(request: Request):
     """Return the shared GemmaEngine instance."""
@@ -93,27 +85,50 @@ def get_router(request: Request):
     return request.app.state.router
 
 
+# ── Auth dependency (require authenticated user) ──────────────────────────────
+
+async def require_auth_dep(request: Request):
+    """
+    FastAPI Depends() target that returns the current authenticated User doc.
+    Used by training_routes.py and other protected endpoints.
+    Raises HTTP 401 if token is missing or invalid.
+    """
+    from fastapi import HTTPException
+    from security.jwt_handler import decode_token
+    from database.models_mongo import User
+
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing Bearer token")
+
+    token = auth[7:]
+    try:
+        claims = decode_token(token)
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    user_id = claims.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Token missing subject")
+
+    user = await User.get(user_id)
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail="User not found or inactive")
+
+    return user
+
+
 # ── Auth header helper ────────────────────────────────────────────────────────
 
 def get_token_from_header(
     authorization: Optional[str] = Header(None),
 ) -> Optional[str]:
-    """
-    FastAPI dependency: extract Bearer token from Authorization header.
-
-    Usage:
-        @router.get("/something")
-        async def something(token: str = Depends(get_token_from_header)):
-            ...
-    """
     if authorization and authorization.startswith("Bearer "):
         return authorization[7:]
     return None
 
 
 # ── Module-level fallback for non-FastAPI callers (e.g. Celery tasks) ────────
-# These replicate the old lru_cache behaviour for code that calls
-# get_engine() / get_kg() directly without a Request object.
 
 def _make_engine():
     from core.gemma_engine import GemmaEngine
@@ -128,7 +143,6 @@ def _make_kg():
     return KnowledgeGraph(persist_dir=persist)
 
 
-# Lazy module-level singletons used only by Celery / scripts
 _engine_fallback = None
 _kg_fallback     = None
 
