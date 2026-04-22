@@ -1,14 +1,9 @@
-# api/main.py
+# main.py
 # GENESIS — FastAPI Application Factory
 #
-# CHANGES (MongoDB Rebuild):
-#   • init_db() → connect_db() (Motor/Beanie)
-#   • Auto-seed uses MongoDB Beanie queries (no SQLAlchemy)
-#   • SessionMiddleware added for Google OAuth state
-#   • OTP auth router registered
-#   • Conversation router registered
-#   • All SQLAlchemy/Alembic imports removed
-#   • close_db() called on shutdown
+# FIXES (Layer Linkage):
+#   • init_singletons now imported from ROOT dependencies.py (not api/dependencies.py)
+#     Root version also registers: training_engine + module_loader on app.state
 # =============================================================================
 
 from __future__ import annotations
@@ -34,11 +29,14 @@ from api.middleware        import logging_middleware
 from api.routes            import register_routes
 from api.websocket         import ws_stream_endpoint
 from database.mongo        import connect_db, close_db
-from api.dependencies      import init_singletons
+
+# ✅ FIX: import from ROOT dependencies.py — this version includes
+#         training_engine + module_loader in init_singletons()
+from dependencies          import init_singletons
 
 log = logging.getLogger("api.main")
 
-FRONTEND_DIST      = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+FRONTEND_DIST      = Path(__file__).resolve().parent / "frontend" / "dist"
 _FALLBACK_PASSWORD = "Genesis@2024!"
 _BLOCKED_PASSWORDS = {"", "changeme", "password"}
 
@@ -98,14 +96,15 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             log.error(f"Manual seed failed (non-fatal): {e}")
 
-    # Singletons
+    # ✅ Singletons — uses root dependencies.py which registers ALL singletons
+    #    including: engine, kg, memory, m1, router, training_engine, module_loader
     try:
         init_singletons(app)
         log.info("Singletons initialised.")
     except Exception as e:
         log.error(f"Singleton init failed: {e}")
 
-    # Load trained modules from registry + DB (Section C)
+    # Load trained modules from registry + DB
     try:
         await app.state.module_loader.load_from_registry()
         log.info("Dynamic module loader: trained modules loaded.")
@@ -133,7 +132,6 @@ def create_app() -> FastAPI:
 
     app.add_middleware(CORSMiddleware, **CORS_SETTINGS)
 
-    # SessionMiddleware for Google OAuth (must be before routes)
     app.add_middleware(
         SessionMiddleware,
         secret_key=os.getenv("SESSION_SECRET_KEY", "dev-fallback-change-in-prod"),
