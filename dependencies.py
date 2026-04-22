@@ -1,16 +1,10 @@
-# api/dependencies.py
-# GENESIS — FastAPI Dependency Injectors
+# dependencies.py  (ROOT — canonical version)
+# GENESIS — FastAPI Dependency Injectors + Task-safe Fallbacks
 #
-# Fixes applied:
-#   • Singletons now live on app.state (set during lifespan) instead of
-#     @lru_cache module globals. This means:
-#       - Proper teardown on shutdown
-#       - No stale cached objects if env vars change between test runs
-#       - Works correctly with FastAPI's dependency injection across workers
-#   • Backward-compatible: if called outside a Request context (e.g. from
-#     Celery tasks), falls back to creating the object directly — this covers
-#     the transition period until all Celery callers are updated
-#   • get_token_from_header promoted to a proper FastAPI Header dependency
+# FIXES (Layer Linkage):
+#   • get_m1_for_task() added — Celery/script safe getter for M1
+#   • get_router_for_task() added — Celery/script safe getter for Router
+#   • All _for_task() fallbacks now use lazy singletons (create once, reuse)
 # =============================================================================
 
 from __future__ import annotations
@@ -24,24 +18,16 @@ from fastapi import Header, Request
 log = logging.getLogger("api.dependencies")
 
 
-# ── Lifespan initializer — call this from api/main.py lifespan ───────────────
+# ── Lifespan initializer ─────────────────────────────────────────────────────
 
 def init_singletons(app) -> None:
     """
     Create all singletons and attach them to app.state.
-    Call once from the FastAPI lifespan context manager.
-
-    Usage in api/main.py:
-        from api.dependencies import init_singletons
-
-        @asynccontextmanager
-        async def lifespan(app):
-            init_singletons(app)
-            yield
+    Call ONCE from the FastAPI lifespan context manager in main.py.
     """
-    from core.gemma_engine import GemmaEngine
+    from core.gemma_engine   import GemmaEngine
     from core.knowledge_graph import KnowledgeGraph
-    from core.memory_manager import MemoryManager
+    from core.memory_manager  import MemoryManager
 
     token   = os.getenv("HF_TOKEN", "")
     model   = os.getenv("GEMMA_MODEL", "default")
@@ -61,54 +47,54 @@ def init_singletons(app) -> None:
     r.register("m1", app.state.m1.ask)
     app.state.router = r
 
-    # Training Engine (Section B)
     from core.training_engine import TrainingEngine
     app.state.training_engine = TrainingEngine()
 
-    # DynamicModuleLoader — wires Router to auto-load trained models (Section C)
+    # ✅ DynamicModuleLoader wires itself to the Router
     from core.module_loader import DynamicModuleLoader
     loader = DynamicModuleLoader.instance()
     loader.set_router(r)
     app.state.module_loader = loader
 
+    # ✅ Populate task-level fallback singletons so Celery workers share
+    #    the same objects if they import this module after startup
+    global _engine_fallback, _kg_fallback, _m1_fallback, _router_fallback
+    _engine_fallback = app.state.engine
+    _kg_fallback     = app.state.kg
+    _m1_fallback     = app.state.m1
+    _router_fallback = r
+
     log.info("Singletons initialised.")
 
 
-# ── Request-scoped dependency getters ────────────────────────────────────────
-# These are the FastAPI Depends() targets. They pull from app.state which was
-# populated by init_singletons() above.
+# ── Request-scoped FastAPI Depends() getters ──────────────────────────────────
 
 def get_engine(request: Request):
-    """Return the shared GemmaEngine instance."""
+    """Return the shared GemmaEngine. Use as Depends(get_engine) in routes."""
     return request.app.state.engine
 
-
 def get_kg(request: Request):
-    """Return the shared KnowledgeGraph instance."""
+    """Return the shared KnowledgeGraph. Use as Depends(get_kg) in routes."""
     return request.app.state.kg
 
-
 def get_m1(request: Request):
-    """Return the shared M1 SelfLearner instance."""
+    """Return the shared M1 SelfLearner. Use as Depends(get_m1) in routes."""
     return request.app.state.m1
 
-
 def get_memory(request: Request):
-    """Return the shared MemoryManager instance."""
+    """Return the shared MemoryManager. Use as Depends(get_memory) in routes."""
     return request.app.state.memory
 
-
 def get_router(request: Request):
-    """Return the shared Router instance."""
+    """Return the shared Router. Use as Depends(get_router) in routes."""
     return request.app.state.router
 
 
-# ── Auth dependency (require authenticated user) ─────────────────────────────
+# ── Auth dependency ───────────────────────────────────────────────────────────
 
 async def require_auth_dep(request: Request):
     """
-    FastAPI Depends() target that returns the current authenticated User doc.
-    Used by training_routes.py and other protected endpoints.
+    FastAPI Depends() — returns the current authenticated User doc.
     Raises HTTP 401 if token is missing or invalid.
     """
     from fastapi import HTTPException
@@ -141,52 +127,72 @@ async def require_auth_dep(request: Request):
 def get_token_from_header(
     authorization: Optional[str] = Header(None),
 ) -> Optional[str]:
-    """
-    FastAPI dependency: extract Bearer token from Authorization header.
-
-    Usage:
-        @router.get("/something")
-        async def something(token: str = Depends(get_token_from_header)):
-            ...
-    """
     if authorization and authorization.startswith("Bearer "):
         return authorization[7:]
     return None
 
 
-# ── Module-level fallback for non-FastAPI callers (e.g. Celery tasks) ────────
-# These replicate the old lru_cache behaviour for code that calls
-# get_engine() / get_kg() directly without a Request object.
+# ── Task-safe fallbacks (Celery / scripts / layers — no Request available) ────
+# These are lazy singletons: created once, reused on every subsequent call.
+# init_singletons() pre-populates them from app.state so Celery workers that
+# import this module after the FastAPI app boots get the exact same objects.
+
+_engine_fallback = None
+_kg_fallback     = None
+_m1_fallback     = None
+_router_fallback = None
+
 
 def _make_engine():
     from core.gemma_engine import GemmaEngine
-    token = os.getenv("HF_TOKEN", "")
-    model = os.getenv("GEMMA_MODEL", "default")
-    return GemmaEngine(token=token, model=model)
-
+    return GemmaEngine(token=os.getenv("HF_TOKEN", ""), model=os.getenv("GEMMA_MODEL", "default"))
 
 def _make_kg():
     from core.knowledge_graph import KnowledgeGraph
-    persist = os.getenv("KG_PERSIST_DIR", "") or None
-    return KnowledgeGraph(persist_dir=persist)
+    return KnowledgeGraph(persist_dir=os.getenv("KG_PERSIST_DIR") or None)
 
+def _make_m1(engine=None, kg=None):
+    from modules import create_m1
+    e = engine or get_engine_for_task()
+    k = kg    or get_kg_for_task()
+    return create_m1(e, k)
 
-# Lazy module-level singletons used only by Celery / scripts
-_engine_fallback = None
-_kg_fallback     = None
+def _make_router(engine=None, m1=None):
+    from core.router import Router
+    e  = engine or get_engine_for_task()
+    m  = m1    or get_m1_for_task()
+    r  = Router(e, default_module="m1")
+    r.register("m1", m.ask)
+    return r
 
 
 def get_engine_for_task():
-    """Get the engine singleton for use in Celery tasks (no Request available)."""
+    """Engine singleton for Celery tasks / layers (no Request required)."""
     global _engine_fallback
     if _engine_fallback is None:
         _engine_fallback = _make_engine()
     return _engine_fallback
 
-
 def get_kg_for_task():
-    """Get the KG singleton for use in Celery tasks (no Request available)."""
+    """KnowledgeGraph singleton for Celery tasks / scripts."""
     global _kg_fallback
     if _kg_fallback is None:
         _kg_fallback = _make_kg()
     return _kg_fallback
+
+def get_m1_for_task():
+    """M1 SelfLearner singleton for Celery tasks (no Request required).
+    ✅ FIX: was missing — ingestion_tasks.py and panel_api.py were calling
+    get_m1() without a Request, causing TypeError at runtime.
+    """
+    global _m1_fallback
+    if _m1_fallback is None:
+        _m1_fallback = _make_m1()
+    return _m1_fallback
+
+def get_router_for_task():
+    """Router singleton for Celery tasks / scripts (no Request required)."""
+    global _router_fallback
+    if _router_fallback is None:
+        _router_fallback = _make_router()
+    return _router_fallback
