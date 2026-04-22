@@ -1,13 +1,11 @@
 # core/caller.py
 # GENESIS — Unified Multi-Model AI Caller
 #
-# Fixes applied:
-#   • _call_gemma4 now reuses the GemmaEngine singleton from api.dependencies
-#     instead of creating a new InferenceClient on every single call
-#     (previous code created new HTTP connection pools on every invocation)
-#   • GEMMA4_MODELS import updated to use the corrected GEMMA_MODELS alias
-#   • Missing env vars now raise ValueError immediately with a clear message
-#   • Logging replaces print() throughout
+# FIXES (Layer Linkage):
+#   • _call_gemma4 now calls get_engine_for_task() instead of get_engine()
+#     get_engine(request) requires a FastAPI Request object and CANNOT be
+#     called from layers (which run outside a request context).
+#     get_engine_for_task() is the correct no-request fallback.
 # =============================================================================
 
 from __future__ import annotations
@@ -46,6 +44,7 @@ LAYER_PROVIDERS = {
     9:  PROVIDER_GEMINI,
     10: PROVIDER_GEMMA4,
     11: PROVIDER_OPENAI,
+    12: PROVIDER_OPENAI,
 }
 
 # ── Heal rotation ─────────────────────────────────────────────────────────────
@@ -132,12 +131,16 @@ def _call_gemma4(
     max_tokens:    int,
 ) -> str:
     """
-    Route through the GemmaEngine singleton so we reuse the existing
-    InferenceClient connection pool instead of creating a new one per call.
+    Route through the GemmaEngine singleton.
+
+    ✅ FIX: Use get_engine_for_task() — this is the no-Request fallback designed
+    for code running OUTSIDE a FastAPI request context (layers, Celery, scripts).
+    The old get_engine(request) requires a FastAPI Request object and will crash
+    when called from layers since no Request is available there.
     """
     try:
-        from api.dependencies import get_engine
-        engine = get_engine()
+        from api.dependencies import get_engine_for_task
+        engine = get_engine_for_task()
         return engine.think(
             prompt,
             system_prompt=system_prompt,
@@ -145,7 +148,7 @@ def _call_gemma4(
             max_tokens=max_tokens,
         )
     except Exception:
-        # Fallback: construct a minimal client if running outside FastAPI context
+        # Hard fallback: build a minimal client directly
         from huggingface_hub import InferenceClient
         from core.gemma_engine import GEMMA_MODELS
 
