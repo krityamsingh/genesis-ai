@@ -1,39 +1,87 @@
-.PHONY: dev test lint seed export docker-up docker-down
+# ============================================================
+# GENESIS — Makefile
+# UPDATED 2026-04: ruff/black replacing flake8/isort
+# ============================================================
 
-dev:
-	uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+.PHONY: help install install-dev lint format test test-cov \
+        dev dev-frontend dev-admin build-frontend docker-build \
+        docker-run seed clean
 
-test:
-	pytest tests/ -v --tb=short
+PYTHON  ?= python3
+PIP     ?= pip
+PORT    ?= 8000
 
-test-unit:
-	pytest tests/unit/ -v
+help:
+	@echo ""
+	@echo "  GENESIS — Available Commands"
+	@echo "  ─────────────────────────────────────────────"
+	@echo "  make install          Install Python deps"
+	@echo "  make install-dev      Install dev + test deps"
+	@echo "  make lint             Ruff + mypy"
+	@echo "  make format           Black + ruff --fix"
+	@echo "  make test             Run pytest"
+	@echo "  make test-cov         Run pytest + coverage"
+	@echo "  make dev              Start API server (reload)"
+	@echo "  make dev-frontend     Start React frontend"
+	@echo "  make dev-admin        Start admin panel"
+	@echo "  make build-frontend   Build frontend for prod"
+	@echo "  make docker-build     Build Docker image"
+	@echo "  make docker-run       Run Docker container"
+	@echo "  make seed             Run DB seeds"
+	@echo "  make clean            Remove cache/dist files"
+	@echo ""
 
-test-integration:
-	pytest tests/integration/ -v
+install:
+	$(PIP) install --upgrade pip
+	$(PIP) install -r requirements.txt
+
+install-dev:
+	$(PIP) install --upgrade pip
+	$(PIP) install -r requirements-dev.txt
 
 lint:
-	flake8 . --max-line-length=100 --exclude=.git,__pycache__,node_modules
-	black --check .
+	ruff check .
+	mypy . --ignore-missing-imports
 
 format:
 	black .
-	isort .
+	ruff check . --fix
+
+test:
+	pytest tests/ -v
+
+test-cov:
+	pytest tests/ -v --cov=. --cov-report=term-missing --cov-report=html
+
+dev:
+	uvicorn api.main:app --reload --port $(PORT) --log-level info
+
+dev-frontend:
+	cd frontend && npm run dev
+
+dev-admin:
+	cd admin/frontend && npm run dev
+
+build-frontend:
+	cd frontend && npm install && npm run build
+	cd admin/frontend && npm install && npm run build
 
 seed:
-	python scripts/seed_data.py
+	$(PYTHON) scripts/seed_data.py
 
-export:
-	python scripts/export_model.py
+docker-build:
+	docker build -t genesis-ai:2.1.0 .
 
-docker-up:
-	docker-compose -f infra/docker-compose.yml up -d
+docker-run:
+	docker run -p 8080:8080 \
+	  --env-file .env \
+	  --name genesis-ai \
+	  genesis-ai:2.1.0
 
-docker-down:
-	docker-compose -f infra/docker-compose.yml down
-
-celery:
-	celery -A tasks.celery_app worker --loglevel=info
-
-shell:
-	python -c "from genesis import Genesis; print('Ready — create: g = Genesis(hf_token=HF_TOKEN)')"
+clean:
+	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+	find . -name "*.pyc" -delete 2>/dev/null || true
+	find . -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
+	find . -name ".ruff_cache" -exec rm -rf {} + 2>/dev/null || true
+	rm -rf htmlcov .coverage coverage.xml 2>/dev/null || true
+	rm -rf frontend/dist admin/frontend/dist 2>/dev/null || true

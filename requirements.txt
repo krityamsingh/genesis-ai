@@ -1,56 +1,73 @@
 # =============================================================================
-# GENESIS — Railway requirements (API-only, no training deps)
-# UPDATED: Added MongoDB stack + itsdangerous/authlib. Removed SQLAlchemy/Redis.
+# GENESIS v3 — Python Requirements
+# Compatible: Python 3.11+
 # =============================================================================
 
 # ── Web Framework ─────────────────────────────────────────────────────────────
-fastapi==0.115.6
-uvicorn[standard]==0.32.1
-starlette==0.41.3
-python-multipart==0.0.18
-bcrypt==4.0.1
+fastapi==0.115.12
+uvicorn[standard]==0.34.0
+starlette==0.46.1
+python-multipart==0.0.20
 
 # ── Data Validation ───────────────────────────────────────────────────────────
-pydantic==2.10.4
-pydantic-settings==2.7.0
+pydantic==2.11.3
+pydantic-settings==2.9.1
 
-# ── Database — MongoDB (replaces SQLAlchemy + Redis) ─────────────────────────
-motor>=3.3.0
-beanie>=1.25.0
-pymongo>=4.6.0
+# ── Database — MongoDB ────────────────────────────────────────────────────────
+motor>=3.7.0
+beanie>=1.29.0
+pymongo>=4.12.0
 
 # ── Auth / OAuth / Session ────────────────────────────────────────────────────
-authlib>=1.3.0
-itsdangerous>=2.1.0
+authlib>=1.5.2
+itsdangerous>=2.2.0
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.2.1
 httpx>=0.28.1
 
 # ── SMS OTP ───────────────────────────────────────────────────────────────────
-twilio>=8.10.0
+twilio>=9.5.0
 
-# ── AI / HuggingFace ─────────────────────────────────────────────────────────
-huggingface-hub==0.27.0
+# ── AI Providers ──────────────────────────────────────────────────────────────
+google-generativeai==0.8.5
+openai==1.76.0
+anthropic==0.51.0
+huggingface-hub==0.31.1
 
-# ── Multi-Provider AI ─────────────────────────────────────────────────────────
-google-generativeai==0.8.3
-openai==1.58.1
+# ── Document Processing (M7) ──────────────────────────────────────────────────
+pypdf==5.4.0
+python-docx>=1.1.2
+Pillow>=10.4.0
 
-# ── Security ──────────────────────────────────────────────────────────────────
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
+# ── Vector Store ─────────────────────────────────────────────────────────────
+chromadb==0.6.4
+
+# ── Task Queue ────────────────────────────────────────────────────────────────
+celery==5.5.2
+redis>=5.2.1
 
 # ── HTTP / Ingestion ──────────────────────────────────────────────────────────
 requests==2.32.3
-PyPDF2==3.0.1
+aiofiles>=24.1.0
 
 # ── Config / Utils ────────────────────────────────────────────────────────────
-python-dotenv==1.0.1
+python-dotenv==1.1.0
 pyyaml==6.0.2
+orjson>=3.10.12
 
-# ── Task Queue ────────────────────────────────────────────────────────────────
-celery==5.4.0
-
-# ── TTS ───────────────────────────────────────────────────────────────────────
+# ── TTS / Audio ───────────────────────────────────────────────────────────────
 gtts==2.5.4
 
-# ── Vector Store ──────────────────────────────────────────────────────────────
-chromadb==0.6.3
+# ── Security ─────────────────────────────────────────────────────────────────
+cryptography>=43.0.3
+
+# ── Observability ─────────────────────────────────────────────────────────────
+structlog>=24.4.0
+
+# ── Optional: Local Whisper ───────────────────────────────────────────────────
+# openai-whisper>=20240930   # Uncomment for local audio transcription
+
+# ── Optional: Local model inference ──────────────────────────────────────────
+# torch>=2.4.0               # Uncomment for local GPU inference
+# transformers>=4.46.0

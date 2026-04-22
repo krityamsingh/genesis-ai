@@ -33,3 +33,11 @@ def register_routes(app: FastAPI):
     # Admin sub-app — must be mounted AFTER include_router calls
     from admin.backend.admin_api import admin_app
     app.mount("/api/admin", admin_app)
+
+
+# ── v3 NEW MODULE ROUTES (M7, M8, M9) ─────────────────────────────────────────
+try:
+    from api.v1.register_new_routes import register_new_module_routes as _reg_new
+    # Called separately after register_routes() in main.py lifespan
+except ImportError:
+    pass

@@ -1,3 +1,11 @@
--r requirements-dev.txt
-pytest-cov>=5.0.0
-faker>=24.0.0
+# GENESIS — Test Dependencies
+# UPDATED: 2026-04
+
+pytest==8.3.5
+pytest-asyncio==0.25.3
+pytest-cov==6.1.0
+httpx==0.28.1
+anyio==4.9.0
+mongomock-motor==0.0.32
+freezegun==1.5.1
+factory-boy==3.3.3
