@@ -93,6 +93,35 @@ def get_router(request: Request):
     return request.app.state.router
 
 
+# ── Auth dependencies ─────────────────────────────────────────────────────────
+
+def require_auth_dep(
+    authorization: Optional[str] = Header(None),
+) -> dict:
+    """
+    FastAPI dependency: validate Bearer token and return decoded claims.
+    Raises HTTP 401 if the token is missing or invalid.
+
+    Usage:
+        @router.get("/something")
+        async def something(current_user: dict = Depends(require_auth_dep)):
+            ...
+    """
+    from fastapi import HTTPException, status
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:]
+    try:
+        from security.permissions import require_auth
+        return require_auth(token)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(exc),
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
 # ── Auth header helper ────────────────────────────────────────────────────────
 
 def get_token_from_header(
