@@ -1,7 +1,7 @@
 # tasks/ingestion_tasks.py
 from __future__ import annotations
 from tasks.celery_app    import celery_app
-from api.dependencies    import get_m1
+from api.dependencies    import get_m1_for_task
 from shared.logger       import get_logger
 
 log = get_logger("tasks.ingestion")
@@ -12,7 +12,7 @@ def ingest_source(self, source: str):
     """Async M1 learn() — used for large files / slow URLs."""
     log.info(f"[Task] ingest_source started: {source[:80]}")
     try:
-        m1     = get_m1()
+        m1     = get_m1_for_task()
         result = m1.learn(source)
         log.info(f"[Task] ingest_source done: {result.get('knowledge_items_stored')} items")
         return result
