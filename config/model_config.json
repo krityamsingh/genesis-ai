@@ -1,0 +1,45 @@
+{
+  "model_name": "genesis-v3-base",
+  "architecture": {
+    "hidden_size": 2048,
+    "num_layers": 24,
+    "num_heads": 16,
+    "ffn_dim": 8192,
+    "vocab_size": 32000,
+    "max_position_embeddings": 8192,
+    "dropout": 0.1,
+    "attention_type": "multi_head_grouped_query"
+  },
+  "training": {
+    "batch_size": 32,
+    "learning_rate": 0.0003,
+    "warmup_steps": 2000,
+    "total_steps": 100000,
+    "optimizer": "adamw",
+    "weight_decay": 0.1,
+    "gradient_clipping": 1.0,
+    "mixed_precision": "bf16"
+  },
+  "data": {
+    "train_tokens": 10000000000,
+    "val_tokens": 100000000,
+    "tokenizer": "sentencepiece",
+    "sequence_length": 2048,
+    "packing": true
+  },
+  "modules": {
+    "enabled": [
+      "m1",
+      "m2",
+      "m3",
+      "m4",
+      "m5",
+      "m6",
+      "m7",
+      "m8",
+      "m9"
+    ],
+    "module_routing": "learned",
+    "cross_module_attention": true
+  }
+}
