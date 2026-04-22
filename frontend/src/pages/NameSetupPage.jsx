@@ -1,5 +1,4 @@
-// frontend/src/pages/NameSetupPage.jsx — NEW FILE
-// First-time onboarding: user sets their display name.
+// frontend/src/pages/NameSetupPage.jsx — v3 UPGRADE
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import '../styles/design-system.css'
@@ -7,74 +6,46 @@ import '../styles/design-system.css'
 const API = '/api/v1'
 
 export default function NameSetupPage() {
-  const navigate    = useNavigate()
-  const [name,    setName]    = useState('')
+  const navigate = useNavigate()
+  const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error,   setError]   = useState('')
+  const [error, setError] = useState('')
 
   const handleSubmit = async () => {
-    const trimmed = name.trim()
-    if (!trimmed) return setError('Please enter a name.')
+    if (!name.trim()) return setError('Please enter your name')
     setLoading(true); setError('')
+    const token = localStorage.getItem('genesis_token')
     try {
-      const token = localStorage.getItem('genesis_token')
-      const res   = await fetch(`${API}/auth/setup-name`, {
+      const res = await fetch(`${API}/auth/setup-name`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ display_name: trimmed }),
+        body: JSON.stringify({ display_name: name.trim() }),
       })
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}))
-        return setError(d.detail || 'Failed to save name.')
-      }
-      navigate('/chat', { replace: true })
-    } catch {
-      setError('Network error.')
-    } finally { setLoading(false) }
+      if (!res.ok) { const d = await res.json(); throw new Error(d.detail || 'Failed') }
+      navigate('/chat')
+    } catch (e) { setError(e.message); setLoading(false) }
   }
 
   return (
-    <div style={{
-      minHeight: '100vh', background: '#F4F4F5',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontFamily: 'var(--font-sans, system-ui)',
-    }}>
-      <div className="card" style={{ width: '100%', maxWidth: 420, padding: 48, textAlign: 'center' }}>
-        <div style={{
-          width: 48, height: 48, borderRadius: 12,
-          background: '#1A1A1A', color: '#fff',
-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 24, fontWeight: 700, marginBottom: 20,
-        }}>G</div>
-
-        <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>What should we call you?</h1>
-        <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 28 }}>
-          This name will appear in your conversations.
-        </p>
-
-        {error && (
-          <div style={{ background: '#FEE2E2', color: '#991B1B', borderRadius: 8, padding: '10px 14px', fontSize: 13, marginBottom: 16 }}>
-            {error}
-          </div>
-        )}
-
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, fontFamily: 'var(--font-sans)' }}>
+      <div style={{ width: '100%', maxWidth: 400, animation: 'fadeIn 0.3s ease', textAlign: 'center' }}>
+        <div style={{ width: 52, height: 52, margin: '0 auto 20px', background: 'linear-gradient(135deg, #D97706, #92400E)', borderRadius: 'var(--r-lg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, fontFamily: 'var(--font-display)', fontStyle: 'italic', color: '#fff' }}>G</div>
+        <h1 style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 26, fontWeight: 'normal', marginBottom: 8 }}>What should we call you?</h1>
+        <p style={{ fontSize: 14, color: 'var(--text-3)', marginBottom: 28 }}>This helps Genesis personalize your experience.</p>
         <input
           className="input"
-          placeholder="Your name"
           value={name}
           onChange={e => setName(e.target.value)}
+          placeholder="Your name"
+          style={{ textAlign: 'center', fontSize: 16, height: 48, marginBottom: 12 }}
           onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-          style={{ textAlign: 'center', fontSize: 16, marginBottom: 20 }}
           autoFocus
         />
-        <button
-          className="btn btn-primary"
-          style={{ width: '100%', justifyContent: 'center', padding: '12px 20px' }}
-          disabled={loading || !name.trim()}
-          onClick={handleSubmit}
-        >
-          {loading ? 'Saving...' : 'Continue →'}
+        {error && <div style={{ padding: '10px 14px', borderRadius: 'var(--r-md)', background: 'var(--error-bg)', color: 'var(--error)', fontSize: 13, marginBottom: 12 }}>{error}</div>}
+        <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', height: 44 }} onClick={handleSubmit} disabled={loading || !name.trim()}>
+          {loading ? <span style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} /> : 'Get started →'}
         </button>
+        <button className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center', marginTop: 8, fontSize: 13 }} onClick={() => navigate('/chat')}>Skip for now</button>
       </div>
     </div>
   )
