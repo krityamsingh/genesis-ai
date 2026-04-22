@@ -1,139 +1,143 @@
-# tests/conftest.py — shared pytest fixtures
+# tests/conftest.py
+# GENESIS — Pytest configuration and shared fixtures
+# UPGRADED 2026-04: mongomock-motor for async MongoDB mocking
+
+from __future__ import annotations
+
+import asyncio
 import os
 import pytest
-from unittest.mock import MagicMock, patch
+import pytest_asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
-# ── Fix #7: Set JWT_SECRET before any security.* import ──────────────────────
-# security/jwt_handler.py raises RuntimeError at module import time if
-# JWT_SECRET is not in the environment. Any test that touches auth_routes,
-# permissions, jwt_handler, or anything that imports from security.* will
-# crash immediately without this. Set a deterministic test-only secret FIRST,
-# before any of those imports happen.
-os.environ.setdefault("JWT_SECRET", "test-only-secret-do-not-use-in-production-32x")
-
-
-# ── Fake GemmaEngine ──────────────────────────────────────────────────────────
-class FakeEngine:
-    """GemmaEngine drop-in for tests — no HF token, no network."""
-    model_id = "fake/gemma-test"
-    client   = MagicMock()
-
-    def think(self, prompt, system_prompt=None, temperature=0.7,
-              max_tokens=1024, model=None) -> str:
-        return f"[FAKE RESPONSE] {prompt[:60]}"
-
-    def think_json(self, prompt, schema_hint="", system_prompt=None,
-                   temperature=0.2, max_tokens=1500) -> str:
-        # Return minimal valid JSON for common schemas
-        if "skills" in prompt or "domain" in prompt:
-            return (
-                '{"domain":"test","difficulty":"beginner",'
-                '"main_topics":["topic1"],"key_facts":["fact1"],'
-                '"skills":[{"name":"Test Skill","level":"beginner",'
-                '"domain":"test","description":"A test skill",'
-                '"prerequisites":[],"related":[]}],'
-                '"concepts":[{"name":"Test Concept","definition":"A concept",'
-                '"domain":"test","examples":[],"key_terms":[]}],'
-                '"summary":"Test summary."}'
-            )
-        if "posterior" in prompt:
-            return '{"posterior":0.7,"evidence_used":[],"reasoning":"test","confidence":"medium"}'
-        if "model_name" in prompt:
-            return ('{"model_name":"TestNet","framework":"PyTorch","layers":[],'
-                    '"training_strategy":"Adam lr=1e-4","estimated_params":"1M",'
-                    '"rationale":"test","code_skeleton":"class Model: pass"}')
-        return '{"result": "fake"}'
-
-    def think_stream(self, prompt, **kwargs):
-        yield "[FAKE STREAM] "
-        yield prompt[:30]
-
-    def think_batch(self, prompts, **kwargs):
-        return [self.think(p) for p in prompts]
-
-    def code(self, problem, language="python", **kwargs) -> str:
-        return f"# Fake {language} code\ndef solution(): pass"
-
-    def see(self, image_source, question, **kwargs) -> str:
-        return "ERA: 2020s | OBJECTS: computer | CLUES: modern tech | DESCRIPTION: a photo"
-
-    def switch_model(self, model): pass
-
-    def __repr__(self): return "<FakeEngine>"
+# Use test MongoDB URL
+os.environ.setdefault("MONGO_URL",     "mongodb://localhost:27017")
+os.environ.setdefault("MONGO_DB_NAME", "genesis_test")
+os.environ.setdefault("JWT_SECRET",    "test-secret-key-do-not-use-in-production")
+os.environ.setdefault("ENV",           "test")
+os.environ.setdefault("HF_TOKEN",      "hf_test_token_placeholder")
 
 
-# ── Fixtures ──────────────────────────────────────────────────────────────────
-@pytest.fixture
-def engine():
-    return FakeEngine()
+# ── Pytest settings ───────────────────────────────────────────────────────────
 
+def pytest_configure(config):
+    config.addinivalue_line("markers", "slow: mark test as slow-running")
+    config.addinivalue_line("markers", "integration: mark test as integration test")
+    config.addinivalue_line("markers", "unit: mark test as unit test")
+
+
+# ── Event loop ────────────────────────────────────────────────────────────────
+
+@pytest.fixture(scope="session")
+def event_loop():
+    loop = asyncio.new_event_loop()
+    yield loop
+    loop.close()
+
+
+# ── Mock GemmaEngine ──────────────────────────────────────────────────────────
 
 @pytest.fixture
-def kg():
-    from core.knowledge_graph import KnowledgeGraph
-    _kg = KnowledgeGraph()       # in-memory TF-IDF (no chromadb needed)
-    yield _kg
-    _kg.reset_all()
+def mock_gemma_engine():
+    """A fully-mocked GemmaEngine that doesn't call HuggingFace."""
+    engine = MagicMock()
+    engine.model_id                     = "google/gemma-4-27b-it"
+    engine.think.return_value           = "This is a mock AI response."
+    engine.think_async                  = AsyncMock(return_value="This is a mock async AI response.")
+    engine.think_json.return_value      = '{"result": "mock", "confidence": 0.9}'
+    engine.think_json_async             = AsyncMock(return_value='{"result": "mock async"}')
+    engine.think_stream.return_value    = iter(["Mock ", "stream ", "response."])
+    engine.think_stream_async           = AsyncMock()
+    engine.code.return_value            = "def mock_function():\n    return 'mock'"
+    engine.see.return_value             = "This image shows a mock object."
+    engine.think_batch.return_value     = ["answer1", "answer2", "answer3"]
+    engine.think_batch_async            = AsyncMock(return_value=["a1", "a2", "a3"])
+    return engine
 
+
+# ── Mock Router ───────────────────────────────────────────────────────────────
 
 @pytest.fixture
-def kg_with_data(kg):
-    """KG pre-loaded with sample knowledge."""
-    kg.store("knowledge", "Python decorators are a design pattern.",
-             metadata={"domain": "programming"})
-    kg.store("knowledge", "Neural networks learn from data using backpropagation.",
-             metadata={"domain": "ml"})
-    kg.store("knowledge", "The Transformer architecture uses self-attention.",
-             metadata={"domain": "ml"})
-    return kg
+def mock_router(mock_gemma_engine):
+    """A Router with mock engine and a single mock m1 module."""
+    with patch("core.gemma_engine.InferenceClient"), \
+         patch("core.gemma_engine.AsyncInferenceClient"):
+        from core.router import Router
+        m1 = MagicMock(return_value={"response": "mock m1 answer"})
+        return Router(engine=mock_gemma_engine, modules={"m1": m1})
 
+
+# ── FastAPI test client ───────────────────────────────────────────────────────
 
 @pytest.fixture
-def m1(engine, kg):
-    from modules.m1_self_learner import M1
-    return M1(engine, kg)
+def test_client(mock_gemma_engine):
+    """HTTPX AsyncClient pointed at the GENESIS FastAPI app."""
+    from httpx import AsyncClient, ASGITransport
+    with patch("api.dependencies.get_engine", return_value=mock_gemma_engine), \
+         patch("database.mongo.connect_db",    new_callable=AsyncMock), \
+         patch("database.mongo.close_db",      new_callable=AsyncMock):
+        from api.main import create_app
+        app    = create_app()
+        client = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+        return client
+
+
+# ── Sample data helpers ───────────────────────────────────────────────────────
+
+@pytest.fixture
+def sample_user_data():
+    return {
+        "username": "testuser",
+        "email":    "test@example.com",
+        "password": "Test@12345!",
+    }
 
 
 @pytest.fixture
-def m2(engine, kg):
-    from modules.m2_research_accel import M2
-    return M2(engine, kg)
+def sample_conversation_data():
+    return {
+        "title":  "Test conversation",
+        "module": "m1",
+    }
 
 
 @pytest.fixture
-def m3(engine, kg):
-    from modules.m3_ai_builder import M3
-    return M3(engine, kg)
+def sample_message_data():
+    return {
+        "content": "What is self-attention?",
+        "role":    "user",
+    }
 
 
 @pytest.fixture
-def m4(engine, kg):
-    from modules.m4_time_reconstruct import M4
-    return M4(engine, kg)
+def admin_headers():
+    """Pre-built auth headers for admin requests in integration tests."""
+    import jwt, datetime
+    token = jwt.encode(
+        {
+            "sub":      "admin@genesis.ai",
+            "is_admin": True,
+            "jti":      "test-jti-admin",
+            "exp":      datetime.datetime.utcnow() + datetime.timedelta(hours=24),
+        },
+        os.environ["JWT_SECRET"],
+        algorithm="HS256",
+    )
+    return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture
-def m5(engine, kg):
-    from modules.m5_intuition_engine import M5
-    return M5(engine, kg)
-
-
-@pytest.fixture
-def m6(engine, kg):
-    from modules.m6_reality_sim import M6
-    return M6(engine, kg)
-
-
-@pytest.fixture
-def memory(kg):
-    from core.memory_manager import MemoryManager
-    return MemoryManager(kg, session_id="test-session")
-
-
-@pytest.fixture
-def router(engine):
-    from core.router import Router
-    r = Router(engine, default_module="m1")
-    r.register("m1", lambda q: f"m1 handled: {q}")
-    r.register("m2", lambda q: f"m2 handled: {q}")
-    return r
+def user_headers():
+    """Pre-built auth headers for regular user requests in integration tests."""
+    import jwt, datetime
+    token = jwt.encode(
+        {
+            "sub":      "test@example.com",
+            "is_admin": False,
+            "jti":      "test-jti-user",
+            "exp":      datetime.datetime.utcnow() + datetime.timedelta(hours=24),
+        },
+        os.environ["JWT_SECRET"],
+        algorithm="HS256",
+    )
+    return {"Authorization": f"Bearer {token}"}
