@@ -1,178 +1,329 @@
-// admin/frontend/src/UserManager.jsx — UPDATED (MongoDB fields + promote/demote + ban)
-// New columns: display_name, phone, google_id, session_count, last_login.
-// New actions: Promote/Demote admin, Ban/Unban user.
-import React, { useEffect, useState } from 'react'
+// UserManager.jsx — Full user CRUD with MongoDB fields
+import React, { useEffect, useState, useRef } from 'react'
 import axios from 'axios'
+import { C, F, card, btn, input, th, td, apiHeaders, fmtDate } from './design'
 
-const api = (token) => ({ headers: { Authorization: `Bearer ${token}` } })
 const BLANK = { username: '', email: '', password: '', is_admin: false }
 
-const cell = { padding: '10px 14px', fontSize: 13, borderBottom: '1px solid #F3F4F6' }
-const th   = { ...cell, fontWeight: 600, color: '#374151', background: '#F9F9F9', whiteSpace: 'nowrap' }
+function Avatar({ user }) {
+  const initials = (user.display_name || user.username || '?').substring(0, 2).toUpperCase()
+  const hue = [...(user.username || 'a')].reduce((a, c) => a + c.charCodeAt(0), 0) % 360
+  return (
+    <div style={{
+      width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+      background: user.avatar_url ? 'transparent' : `hsl(${hue}, 60%, 70%)`,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: 11, fontWeight: 700, color: '#fff',
+      overflow: 'hidden',
+    }}>
+      {user.avatar_url
+        ? <img src={user.avatar_url} alt={initials} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        : initials
+      }
+    </div>
+  )
+}
 
-export default function UserManager({ token }) {
+export default function UserManager({ token, toast }) {
   const [users,   setUsers]   = useState([])
   const [loading, setLoading] = useState(true)
   const [form,    setForm]    = useState(BLANK)
-  const [adding,  setAdding]  = useState(false)
+  const [busy,    setBusy]    = useState(false)
   const [showAdd, setShowAdd] = useState(false)
-  const [msg,     setMsg]     = useState('')
+  const [search,  setSearch]  = useState('')
+  const [filter,  setFilter]  = useState('all') // all | admin | active | inactive
+  const searchRef = useRef(null)
 
   const load = async () => {
     setLoading(true)
     try {
-      const { data } = await axios.get('/api/v1/admin/users', api(token))
+      const { data } = await axios.get('/api/v1/admin/users', apiHeaders(token))
       setUsers(Array.isArray(data) ? data : [])
-    } catch { setMsg('Failed to load users.') }
+    } catch { toast?.('Failed to load users', 'error') }
     finally { setLoading(false) }
   }
 
   useEffect(() => { load() }, []) // eslint-disable-line
 
   const createUser = async () => {
-    setAdding(true); setMsg('')
+    if (!form.username || !form.email || !form.password) {
+      toast?.('All fields are required', 'error'); return
+    }
+    setBusy(true)
     try {
-      await axios.post('/api/v1/admin/users', form, api(token))
-      setMsg('User created.'); setForm(BLANK); setShowAdd(false)
-      load()
+      await axios.post('/api/v1/admin/users', form, apiHeaders(token))
+      toast?.(`User ${form.username} created`, 'success')
+      setForm(BLANK); setShowAdd(false); load()
     } catch (e) {
-      setMsg(e.response?.data?.detail || 'Failed to create user.')
-    } finally { setAdding(false) }
+      toast?.(e.response?.data?.detail || 'Failed to create user', 'error')
+    } finally { setBusy(false) }
   }
 
-  const deactivate = async (id) => {
-    if (!window.confirm('Deactivate this user?')) return
-    try { await axios.delete(`/api/v1/admin/users/${id}`, api(token)); load() }
-    catch { setMsg('Failed to deactivate.') }
+  const deactivate = async (id, uname) => {
+    if (!window.confirm(`Ban user "${uname}"? They will lose access.`)) return
+    try {
+      await axios.delete(`/api/v1/admin/users/${id}`, apiHeaders(token))
+      toast?.(`${uname} banned`, 'success'); load()
+    } catch { toast?.('Failed to ban user', 'error') }
   }
 
-  const promote = async (id) => {
-    try { await axios.post(`/api/v1/admin/users/${id}/promote`, {}, api(token)); load() }
-    catch { setMsg('Failed to promote.') }
+  const promote = async (id, uname) => {
+    try {
+      await axios.post(`/api/v1/admin/users/${id}/promote`, {}, apiHeaders(token))
+      toast?.(`${uname} promoted to admin`, 'success'); load()
+    } catch { toast?.('Failed to promote', 'error') }
   }
 
-  const demote = async (id) => {
-    if (!window.confirm('Remove admin rights from this user?')) return
-    try { await axios.post(`/api/v1/admin/users/${id}/demote`, {}, api(token)); load() }
-    catch { setMsg('Failed to demote.') }
+  const demote = async (id, uname) => {
+    if (!window.confirm(`Remove admin rights from "${uname}"?`)) return
+    try {
+      await axios.post(`/api/v1/admin/users/${id}/demote`, {}, apiHeaders(token))
+      toast?.(`${uname} demoted`, 'success'); load()
+    } catch { toast?.('Failed to demote', 'error') }
   }
+
+  // Filtered & searched users
+  const visible = users
+    .filter(u => {
+      if (filter === 'admin')    return u.is_admin
+      if (filter === 'active')   return u.is_active
+      if (filter === 'inactive') return !u.is_active
+      return true
+    })
+    .filter(u => {
+      if (!search) return true
+      const q = search.toLowerCase()
+      return (u.username || '').toLowerCase().includes(q)
+          || (u.email || '').toLowerCase().includes(q)
+          || (u.display_name || '').toLowerCase().includes(q)
+    })
 
   return (
-    <div style={{ padding: 24 }}>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20, gap: 12 }}>
-        <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Users</h2>
+    <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16, animation: 'fadeIn 200ms ease' }}>
+
+      {/* Toolbar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        {/* Search */}
+        <div style={{ position: 'relative', flex: '1 1 220px', maxWidth: 320 }}>
+          <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: C.textMuted, pointerEvents: 'none' }}>⌕</span>
+          <input
+            ref={searchRef}
+            placeholder="Search users…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{
+              ...input(),
+              paddingLeft: 30, paddingRight: search ? 30 : 12,
+              fontSize: 13,
+            }}
+          />
+          {search && (
+            <button onClick={() => setSearch('')} style={{
+              position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+              background: 'none', border: 'none', cursor: 'pointer', color: C.textMuted, fontSize: 13,
+            }}>✕</button>
+          )}
+        </div>
+
+        {/* Filter tabs */}
+        <div style={{ display: 'flex', gap: 4, background: C.bgMuted, borderRadius: 8, padding: 3 }}>
+          {[['all', 'All'], ['admin', 'Admins'], ['active', 'Active'], ['inactive', 'Banned']].map(([k, label]) => (
+            <button key={k} onClick={() => setFilter(k)} style={{
+              padding: '5px 12px', borderRadius: 6, border: 'none',
+              background: filter === k ? C.bgCard : 'transparent',
+              color: filter === k ? C.textPrimary : C.textSecondary,
+              fontSize: 12, fontWeight: filter === k ? 600 : 400,
+              cursor: 'pointer',
+              boxShadow: filter === k ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+            }}>{label}</button>
+          ))}
+        </div>
+
         <div style={{ flex: 1 }} />
-        <button
-          onClick={() => setShowAdd(s => !s)}
-          style={{
-            padding: '7px 14px', borderRadius: 8, border: '1px solid #E5E7EB',
-            background: showAdd ? '#F3F4F6' : '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 500,
-          }}
-        >
-          {showAdd ? '✕ Cancel' : '+ Add User'}
+
+        <button onClick={load} style={{ ...btn('ghost'), fontSize: 13, color: C.textMuted }}>↺ Refresh</button>
+        <button onClick={() => setShowAdd(s => !s)} style={{
+          ...btn(showAdd ? 'default' : 'primary'),
+          fontSize: 13,
+        }}>
+          {showAdd ? '✕ Cancel' : '+ New User'}
         </button>
       </div>
 
-      {msg && (
-        <div style={{
-          background: msg.startsWith('Failed') ? '#FEE2E2' : '#D1FAE5',
-          color: msg.startsWith('Failed') ? '#991B1B' : '#065F46',
-          borderRadius: 8, padding: '10px 14px', fontSize: 13, marginBottom: 16,
-        }}>{msg}</div>
-      )}
-
       {/* Add user form */}
       {showAdd && (
-        <div style={{ background: '#F9F9F9', border: '1px solid #E5E7EB', borderRadius: 10, padding: 20, marginBottom: 20 }}>
-          <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>New User</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-            {['username', 'email', 'password'].map(f => (
-              <input key={f} placeholder={f.charAt(0).toUpperCase() + f.slice(1)}
-                type={f === 'password' ? 'password' : 'text'}
-                value={form[f]} onChange={e => setForm(p => ({ ...p, [f]: e.target.value }))}
-                style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #E5E7EB', fontSize: 13 }}
-              />
+        <div style={{
+          ...card({ padding: 20, background: '#F0F7FF', border: `1px solid #BFDBFE` }),
+          animation: 'fadeIn 150ms ease',
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.textPrimary, marginBottom: 14 }}>Create New User</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginBottom: 14 }}>
+            {[
+              { k: 'username', label: 'Username', type: 'text', ph: 'johndoe' },
+              { k: 'email',    label: 'Email',    type: 'email', ph: 'john@example.com' },
+              { k: 'password', label: 'Password', type: 'password', ph: '••••••••' },
+            ].map(({ k, label, type, ph }) => (
+              <div key={k}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textSecondary, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  {label}
+                </label>
+                <input
+                  type={type} placeholder={ph}
+                  value={form[k]}
+                  onChange={e => setForm(p => ({ ...p, [k]: e.target.value }))}
+                  style={{ ...input(), fontSize: 13, border: `1px solid #BFDBFE` }}
+                />
+              </div>
             ))}
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-              <input type="checkbox" checked={form.is_admin}
-                onChange={e => setForm(p => ({ ...p, is_admin: e.target.checked }))} />
-              Admin
-            </label>
           </div>
-          <button
-            disabled={adding || !form.username || !form.email || !form.password}
-            onClick={createUser}
-            style={{
-              padding: '8px 16px', borderRadius: 8, border: 'none',
-              background: '#2563EB', color: '#fff', fontSize: 13, fontWeight: 600,
-              cursor: adding ? 'not-allowed' : 'pointer', opacity: adding ? 0.7 : 1,
-            }}
-          >
-            {adding ? 'Creating…' : 'Create User'}
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', userSelect: 'none' }}>
+              <input type="checkbox" checked={form.is_admin}
+                onChange={e => setForm(p => ({ ...p, is_admin: e.target.checked }))}
+                style={{ width: 15, height: 15 }} />
+              <span style={{ fontWeight: 500, color: C.textPrimary }}>Grant admin rights</span>
+            </label>
+            <div style={{ flex: 1 }} />
+            <button
+              disabled={busy || !form.username || !form.email || !form.password}
+              onClick={createUser}
+              style={{
+                ...btn('primary'),
+                opacity: busy || !form.username || !form.email || !form.password ? 0.65 : 1,
+                cursor: busy ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {busy ? <><span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⟳</span> Creating…</> : 'Create User'}
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Users table */}
-      <div style={{ border: '1px solid #E5E7EB', borderRadius: 10, overflow: 'auto' }}>
+      {/* Stats bar */}
+      <div style={{ display: 'flex', gap: 8, fontSize: 12, color: C.textSecondary, alignItems: 'center' }}>
+        <span>{visible.length} of {users.length} users</span>
+        {search && <span>· filtered by "{search}"</span>}
+        <span style={{ marginLeft: 'auto' }}>
+          {users.filter(u => u.is_active).length} active · {users.filter(u => u.is_admin).length} admins
+        </span>
+      </div>
+
+      {/* Table */}
+      <div style={{ ...card(), overflow: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
           <thead>
             <tr>
-              {['Username', 'Display Name', 'Email / Phone', 'Google', 'Admin', 'Active', 'Sessions', 'Last Login', 'Actions'].map(h => (
-                <th key={h} style={th}>{h}</th>
+              {['User', 'Contact', 'Auth', 'Role', 'Status', 'Sessions', 'Last Login', 'Actions'].map(h => (
+                <th key={h} style={th()}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={9} style={{ ...cell, textAlign: 'center', color: '#9CA3AF' }}>Loading…</td></tr>
+              <tr><td colSpan={8} style={{ ...td(), textAlign: 'center', color: C.textMuted, padding: 32 }}>
+                <span style={{ animation: 'spin 1s linear infinite', display: 'inline-block', marginRight: 8 }}>⟳</span>
+                Loading users…
+              </td></tr>
             )}
-            {!loading && users.length === 0 && (
-              <tr><td colSpan={9} style={{ ...cell, textAlign: 'center', color: '#9CA3AF' }}>No users found.</td></tr>
+            {!loading && visible.length === 0 && (
+              <tr><td colSpan={8} style={{ ...td(), textAlign: 'center', color: C.textMuted, padding: 32 }}>
+                {search ? `No users match "${search}"` : 'No users found.'}
+              </td></tr>
             )}
-            {users.map((u, i) => (
-              <tr key={u.id} style={{ background: i % 2 === 0 ? '#fff' : '#FAFAFA' }}>
-                <td style={cell}>
-                  <div style={{ fontWeight: 500 }}>{u.username}</div>
-                  <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2, fontFamily: 'monospace' }}>
-                    {u.id?.slice(0, 12)}…
+            {visible.map(u => (
+              <tr key={u.id || u._id} style={{ transition: 'background 100ms' }}
+                onMouseEnter={e => e.currentTarget.style.background = C.bgHover}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >
+                {/* User */}
+                <td style={td()}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <Avatar user={u} />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{u.username}</div>
+                      {u.display_name && (
+                        <div style={{ fontSize: 11, color: C.textMuted }}>{u.display_name}</div>
+                      )}
+                      <div style={{ fontSize: 10, color: C.textMuted, fontFamily: F.mono }}>
+                        {(u.id || u._id || '').toString().slice(0, 12)}…
+                      </div>
+                    </div>
                   </div>
                 </td>
-                <td style={cell}>{u.display_name || <span style={{ color: '#D1D5DB' }}>—</span>}</td>
-                <td style={cell}>
-                  <div>{u.email || <span style={{ color: '#D1D5DB' }}>—</span>}</div>
-                  {u.phone && <div style={{ fontSize: 11, color: '#6B7280' }}>{u.phone}</div>}
+
+                {/* Contact */}
+                <td style={td()}>
+                  <div style={{ fontSize: 12 }}>{u.email || <span style={{ color: C.textMuted }}>—</span>}</div>
+                  {u.phone && <div style={{ fontSize: 11, color: C.textSecondary }}>{u.phone}</div>}
                 </td>
-                <td style={{ ...cell, textAlign: 'center' }}>
-                  {u.google_id
-                    ? <span style={{ background: '#DBEAFE', color: '#1D4ED8', borderRadius: 4, padding: '1px 6px', fontSize: 11, fontWeight: 600 }}>✓</span>
-                    : <span style={{ color: '#D1D5DB' }}>—</span>
-                  }
+
+                {/* Auth methods */}
+                <td style={td()}>
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    {u.google_id && (
+                      <span style={{ background: '#EFF6FF', color: '#1D4ED8', borderRadius: 4, padding: '1px 6px', fontSize: 10, fontWeight: 600 }}>
+                        🌐 Google
+                      </span>
+                    )}
+                    {u.phone && (
+                      <span style={{ background: C.greenLight, color: '#065F46', borderRadius: 4, padding: '1px 6px', fontSize: 10, fontWeight: 600 }}>
+                        📱 OTP
+                      </span>
+                    )}
+                    {!u.google_id && !u.phone && (
+                      <span style={{ background: '#F3F4F6', color: C.textSecondary, borderRadius: 4, padding: '1px 6px', fontSize: 10, fontWeight: 600 }}>
+                        🔑 Password
+                      </span>
+                    )}
+                  </div>
                 </td>
-                <td style={{ ...cell, textAlign: 'center' }}>
+
+                {/* Role */}
+                <td style={{ ...td(), textAlign: 'center' }}>
                   {u.is_admin
-                    ? <span style={{ background: '#D1FAE5', color: '#065F46', borderRadius: 4, padding: '1px 6px', fontSize: 11, fontWeight: 600 }}>Admin</span>
-                    : <span style={{ color: '#D1D5DB' }}>—</span>
+                    ? <span style={{ background: C.amberLight, color: '#92400E', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>Admin</span>
+                    : <span style={{ color: C.textMuted, fontSize: 12 }}>User</span>
                   }
                 </td>
-                <td style={{ ...cell, textAlign: 'center' }}>
-                  <span style={{
-                    display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
-                    background: u.is_active ? '#10B981' : '#EF4444',
-                  }} />
+
+                {/* Status */}
+                <td style={{ ...td(), textAlign: 'center' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: u.is_active ? C.green : C.red, flexShrink: 0 }} />
+                    <span style={{ fontSize: 11, color: u.is_active ? '#065F46' : '#991B1B', fontWeight: 500 }}>
+                      {u.is_active ? 'Active' : 'Banned'}
+                    </span>
+                  </span>
                 </td>
-                <td style={{ ...cell, textAlign: 'center', color: '#6B7280' }}>{u.session_count ?? 0}</td>
-                <td style={{ ...cell, fontSize: 11, color: '#6B7280', whiteSpace: 'nowrap' }}>
-                  {u.last_login ? new Date(u.last_login).toLocaleDateString() : '—'}
+
+                {/* Sessions */}
+                <td style={{ ...td(), textAlign: 'center', color: C.textSecondary, fontFamily: F.mono, fontSize: 13 }}>
+                  {u.session_count ?? 0}
                 </td>
-                <td style={{ ...cell }}>
+
+                {/* Last login */}
+                <td style={{ ...td(), fontSize: 12, color: C.textSecondary, whiteSpace: 'nowrap' }}>
+                  {u.last_login ? fmtDate(u.last_login) : '—'}
+                </td>
+
+                {/* Actions */}
+                <td style={td()}>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {u.is_admin
-                      ? <button onClick={() => demote(u.id)} style={btnStyle('#FEE2E2', '#991B1B')}>Demote</button>
-                      : <button onClick={() => promote(u.id)} style={btnStyle('#DBEAFE', '#1D4ED8')}>Promote</button>
+                      ? <button onClick={() => demote(u.id || u._id, u.username)}
+                          style={{ ...btn('default'), padding: '4px 10px', fontSize: 11 }}>
+                          Demote
+                        </button>
+                      : <button onClick={() => promote(u.id || u._id, u.username)}
+                          style={{ background: C.blueLight, color: C.blue, border: `1px solid #BFDBFE`, padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                          Promote
+                        </button>
                     }
                     {u.is_active && (
-                      <button onClick={() => deactivate(u.id)} style={btnStyle('#F3F4F6', '#374151')}>Ban</button>
+                      <button onClick={() => deactivate(u.id || u._id, u.username)}
+                        style={{ ...btn('danger'), padding: '4px 10px', fontSize: 11 }}>
+                        Ban
+                      </button>
                     )}
                   </div>
                 </td>
@@ -182,17 +333,9 @@ export default function UserManager({ token }) {
         </table>
       </div>
 
-      <div style={{ marginTop: 12, fontSize: 12, color: '#9CA3AF' }}>
-        {users.length} user{users.length !== 1 ? 's' : ''} total
+      <div style={{ fontSize: 11, color: C.textMuted, textAlign: 'center' }}>
+        {users.length} total users · {users.filter(u => u.is_active).length} active · {users.filter(u => u.is_admin).length} admins
       </div>
     </div>
   )
-}
-
-function btnStyle(bg, color) {
-  return {
-    padding: '4px 10px', borderRadius: 6, border: 'none',
-    background: bg, color, fontSize: 11, fontWeight: 600,
-    cursor: 'pointer', whiteSpace: 'nowrap',
-  }
 }
