@@ -1,13 +1,10 @@
-// frontend/src/routes/routes_index.jsx
-// NOTE: This is an alternative router file. The canonical one is routes/index.jsx.
-// Kept for compatibility but points to the same fixed page paths.
+// frontend/src/routes/index.jsx
 import React, { lazy, Suspense } from 'react'
 import { createBrowserRouter } from 'react-router-dom'
 import PrivateRoute  from './PrivateRoute'
 import Loader        from '../components/Loader'
 import NotFound      from '../components/NotFound'
 
-// FIX: All lazy imports corrected to ../pages/<file> with proper casing
 const App        = lazy(() => import('../App'))
 const Login      = lazy(() => import('../pages/login'))
 const Dashboard  = lazy(() => import('../pages/Dashboard'))

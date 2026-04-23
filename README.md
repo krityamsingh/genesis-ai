@@ -1,4 +1,10 @@
+
 # GENESIS v3 — AI Platform
+
+
+> [!WARNING]
+> 🚧 **This project is currently under active development and testing. Expect breaking changes. Not production-ready yet.**
+ krityam-All
 
 > A self-learning, multi-modal AI platform with a full Claude.ai-style interface.
 

@@ -9,6 +9,9 @@
 #   • Conversation router registered
 #   • All SQLAlchemy/Alembic imports removed
 #   • close_db() called on shutdown
+
+#   • module_loader.load_from_registry() called at startup
+krityam-All
 # =============================================================================
 
 from __future__ import annotations
@@ -104,6 +107,13 @@ async def lifespan(app: FastAPI):
         log.info("Singletons initialised.")
     except Exception as e:
         log.error(f"Singleton init failed: {e}")
+
+    # Load trained modules from registry + DB
+    try:
+        await app.state.module_loader.load_from_registry()
+        log.info("Dynamic module loader: trained modules loaded.")
+    except Exception as e:
+        log.warning(f"Module loader failed (non-fatal): {e}")
 
     log.info(
         f"GENESIS starting | model={os.getenv('GEMMA_MODEL', 'default')} | "
