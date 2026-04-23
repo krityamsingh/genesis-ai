@@ -1,0 +1,90 @@
+# GENESIS v3 — docker-compose (development)
+version: '3.9'
+
+services:
+  api:
+    build: .
+    ports:
+      - "8080:8080"
+    env_file: .env
+    environment:
+      - ENV=development
+      - MONGODB_URI=mongodb://mongo:27017/genesis
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build: .
+    command: celery -A tasks.celery_app worker --loglevel=info -Q default,ingestion,sim
+    env_file: .env
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017/genesis
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - mongo
+      - redis
+    restart: unless-stopped
+
+  frontend-dev:
+    image: node:20-alpine
+    working_dir: /app
+    command: npm run dev -- --host 0.0.0.0
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:8080/api/v1
+    profiles:
+      - dev
+
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  chroma:
+    image: chromadb/chroma:latest
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    restart: unless-stopped
+
+volumes:
+  mongo_data:
+  redis_data:
+  chroma_data:

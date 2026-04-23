@@ -214,7 +214,7 @@ Content to analyse:
         result = self.extract(text, source)
         return result.skills
 
-    def get_skill_map(self, query: str) -> list[Skill]:
+    def get_skill_map(self, query: str, source: str = "knowledge_graph") -> list[Skill]:
         """Search KG for skills matching a query."""
         raw_results = self.kg.search("knowledge", query, n_results=10)
         skills = []
@@ -341,6 +341,3 @@ Content to analyse:
         head = int(max_chars * 0.70)
         tail = max_chars - head
         return text[:head] + "\n...[truncated]...\n" + text[-tail:]
-
-
-

@@ -20,7 +20,7 @@ from typing import Any
 
 from fastapi import WebSocket, WebSocketDisconnect
 
-from api.dependencies          import get_m1, get_engine
+from api.dependencies          import get_engine_for_task
 from security.permissions      import require_auth
 from security.rate_limiter     import check_rate_limit, RateLimitError
 
@@ -126,8 +126,8 @@ async def ws_stream_endpoint(websocket: WebSocket) -> None:
     _manager.add(user_id, websocket)
     log.info(f"WebSocket connected: user={user_id} admin={is_admin} ip={websocket.client.host if websocket.client else 'unknown'}")
 
-    engine = get_engine()
-    m1     = get_m1()
+    engine = websocket.app.state.engine if hasattr(websocket, "app") else get_engine_for_task()
+    m1     = websocket.app.state.m1
 
     # ── 4. Message loop ───────────────────────────────────────────────────────
     try:

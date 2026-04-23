@@ -1,267 +1,70 @@
-/* Fix #9: @import must precede all other statements in CSS.
-   Moved the Google Fonts @import to the very top, before the
-   @tailwind directives. Vite/PostCSS emits a build error otherwise:
-   "@import must precede all other statements (besides @charset or empty @layer)"
-*/
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,300&family=Space+Mono:wght@400;700&display=swap');
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-/* ── Root & Reset ─────────────────────────────── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-:root {
-  --bg0:  #06060A;
-  --bg1:  #0C0C12;
-  --bg2:  #111119;
-  --bg3:  #17171F;
-  --b0:   #1C1C28;
-  --b1:   #252538;
-  --b2:   #313148;
-  --t0:   #EEEEF8;
-  --t1:   #8888A8;
-  --t2:   #3A3A55;
-  --acc:  #F59E0B;
-  --accl: #FBBF24;
-  --accd: #B45309;
-  --gr:   #10B981;
-  --rd:   #F43F5E;
-  --bl:   #60A5FA;
-  --pu:   #8B5CF6;
-  --or:   #F97316;
-  --pi:   #EC4899;
-}
+/* GENESIS v3 — Global styles (import after design-system.css) */
+@import './design-system.css';
 
 html, body, #root {
   height: 100%;
-  background: var(--bg0);
-  color: var(--t0);
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 13px;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
 }
 
-/* ── Scrollbars ───────────────────────────────── */
-::-webkit-scrollbar               { width: 3px; height: 3px; }
-::-webkit-scrollbar-track         { background: transparent; }
-::-webkit-scrollbar-thumb         { background: #1C1C28; border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover   { background: rgba(245,158,11,.25); }
+/* ── Layout helpers ─────────────────────────────────────────── */
+.flex        { display: flex; }
+.flex-col    { display: flex; flex-direction: column; }
+.flex-1      { flex: 1; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+.justify-between { justify-content: space-between; }
+.gap-2       { gap: 8px; }
+.gap-3       { gap: 12px; }
+.gap-4       { gap: 16px; }
+.w-full      { width: 100%; }
+.h-full      { height: 100%; }
+.overflow-hidden { overflow: hidden; }
+.overflow-y-auto { overflow-y: auto; }
+.min-w-0     { min-width: 0; }
+.truncate    { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.text-center { text-align: center; }
+.relative    { position: relative; }
+.absolute    { position: absolute; }
+.inset-0     { top: 0; right: 0; bottom: 0; left: 0; }
+.z-10        { z-index: 10; }
+.z-50        { z-index: 50; }
+.pointer     { cursor: pointer; }
+.sr-only     { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
 
-/* ── Selection ───────────────────────────────── */
-::selection { background: rgba(245,158,11,.25); color: var(--t0); }
+/* ── Typography helpers ─────────────────────────────────────── */
+.text-xs   { font-size: 11px; }
+.text-sm   { font-size: 13px; }
+.text-base { font-size: 15px; }
+.text-lg   { font-size: 17px; }
+.text-xl   { font-size: 20px; }
+.font-medium { font-weight: 500; }
+.font-bold   { font-weight: 700; }
+.italic      { font-style: italic; }
+.font-display { font-family: var(--font-display); }
+.font-mono   { font-family: var(--font-mono); }
+.text-muted  { color: var(--text-3); }
+.text-faint  { color: var(--text-4); }
 
-/* ── Input / Textarea base ───────────────────── */
-input, textarea, select {
-  background: var(--bg2);
-  color: var(--t0);
-  border: 1px solid var(--b0);
-  border-radius: 5px;
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 12px;
-  outline: none;
-  transition: border-color .15s, box-shadow .15s;
+/* ── Spacing helpers ────────────────────────────────────────── */
+.p-0   { padding: 0; }
+.p-2   { padding: 8px; }
+.p-3   { padding: 12px; }
+.p-4   { padding: 16px; }
+.p-5   { padding: 20px; }
+.px-4  { padding-left: 16px; padding-right: 16px; }
+.py-2  { padding-top: 8px; padding-bottom: 8px; }
+.mt-2  { margin-top: 8px; }
+.mt-4  { margin-top: 16px; }
+.mb-2  { margin-bottom: 8px; }
+.mb-4  { margin-bottom: 16px; }
+
+/* ── Link resets ────────────────────────────────────────────── */
+a { color: inherit; text-decoration: none; }
+
+/* ── Responsive ─────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .hide-mobile { display: none !important; }
 }
-input:focus, textarea:focus, select:focus {
-  border-color: var(--acc);
-  box-shadow: 0 0 0 2px rgba(245,158,11,.1);
+@media (min-width: 641px) {
+  .show-mobile-only { display: none !important; }
 }
-input::placeholder, textarea::placeholder { color: var(--t2); }
-
-/* ── Buttons ──────────────────────────────────── */
-button {
-  font-family: 'IBM Plex Mono', monospace;
-  cursor: pointer;
-  transition: all .15s;
-  border: none;
-  background: transparent;
-  color: inherit;
-}
-button:disabled { opacity: .4; cursor: not-allowed; }
-
-/* ── Utility classes ─────────────────────────── */
-.font-display { font-family: 'Space Mono', monospace; }
-
-.g-card {
-  background: var(--bg1);
-  border: 1px solid var(--b0);
-  border-radius: 8px;
-}
-
-.g-card-acc {
-  background: var(--bg1);
-  border: 1px solid rgba(245,158,11,.22);
-  border-radius: 8px;
-  box-shadow: 0 0 0 1px rgba(245,158,11,.06);
-}
-
-.g-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  border: 1px solid var(--b0);
-  border-radius: 5px;
-  font-size: 12px;
-  color: var(--t1);
-  transition: all .15s;
-}
-.g-btn:hover  { background: var(--bg3); color: var(--t0); border-color: var(--b1); }
-.g-btn:active { transform: scale(.97); }
-
-.g-btn-primary {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  background: var(--acc);
-  border: none;
-  border-radius: 5px;
-  font-size: 12px;
-  font-weight: 700;
-  color: #06060A;
-  letter-spacing: .04em;
-  transition: all .15s;
-}
-.g-btn-primary:hover  { background: var(--accl); }
-.g-btn-primary:active { transform: scale(.97); }
-
-.g-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 7px;
-  border-radius: 3px;
-  font-size: 10px;
-  letter-spacing: .05em;
-  font-family: 'IBM Plex Mono', monospace;
-  white-space: nowrap;
-  font-weight: 500;
-}
-
-.g-dot {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.g-label {
-  font-size: 10px;
-  color: var(--t2);
-  letter-spacing: .07em;
-  text-transform: uppercase;
-}
-
-/* ── Grid dot background ──────────────────────── */
-.g-dotbg {
-  background-image: radial-gradient(circle, var(--b0) 1px, transparent 1px);
-  background-size: 24px 24px;
-}
-
-/* ── Glow border (amber) ──────────────────────── */
-.g-glow-border {
-  border: 1px solid rgba(245,158,11,.35);
-  box-shadow: 0 0 16px rgba(245,158,11,.12), inset 0 0 16px rgba(245,158,11,.04);
-}
-
-/* ── Monospace pre blocks ─────────────────────── */
-.g-pre {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 11px;
-  line-height: 1.7;
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: var(--t0);
-}
-
-/* ── Scanline overlay ─────────────────────────── */
-.g-scanlines::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(
-    to bottom,
-    transparent 0px,
-    transparent 2px,
-    rgba(0,0,0,.03) 2px,
-    rgba(0,0,0,.03) 4px
-  );
-  pointer-events: none;
-  z-index: 0;
-}
-
-/* ── Chart tooltip ────────────────────────────── */
-.recharts-tooltip-wrapper .recharts-default-tooltip {
-  background: var(--bg2) !important;
-  border: 1px solid var(--b1) !important;
-  border-radius: 6px !important;
-  font-family: 'IBM Plex Mono', monospace !important;
-  font-size: 11px !important;
-  color: var(--t0) !important;
-}
-.recharts-cartesian-axis-tick-value { fill: var(--t2) !important; font-size: 10px !important; }
-.recharts-cartesian-grid line { stroke: var(--b0) !important; }
-
-/* ── Force graph canvas ───────────────────────── */
-canvas { display: block; }
-
-/* ── Toggle switch ───────────────────────────── */
-.g-toggle-track {
-  position: relative;
-  display: inline-block;
-  width: 36px;
-  height: 20px;
-  border-radius: 10px;
-  background: var(--b1);
-  transition: background .2s;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.g-toggle-track.on { background: var(--acc); }
-.g-toggle-thumb {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: #fff;
-  transition: transform .18s;
-  box-shadow: 0 1px 3px rgba(0,0,0,.4);
-}
-.g-toggle-track.on .g-toggle-thumb { transform: translateX(16px); }
-
-/* ── Status dot pulse ────────────────────────── */
-@keyframes g-pulse {
-  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 currentColor; }
-  50%       { opacity: .6; box-shadow: 0 0 0 3px transparent; }
-}
-.g-dot-pulse { animation: g-pulse 2s ease-in-out infinite; }
-
-/* ── Wave bar ────────────────────────────────── */
-.wave-bar {
-  width: 3px;
-  border-radius: 2px;
-  background: var(--b1);
-  transition: height .08s ease, background .3s;
-}
-.wave-bar.active {
-  background: linear-gradient(to top, var(--accd), var(--acc));
-}
-
-/* ── Timeline line ───────────────────────────── */
-.timeline-line {
-  position: absolute;
-  left: 50%;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: linear-gradient(to bottom, transparent, var(--b1) 5%, var(--b1) 95%, transparent);
-  transform: translateX(-50%);
-}
-
-/* ── Log line ────────────────────────────────── */
-.log-line:nth-child(even) { background: rgba(255,255,255,.012); }

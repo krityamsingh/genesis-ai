@@ -1,31 +1,203 @@
 {
-  "info": { "name": "GENESIS API", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json" },
+  "info": {
+    "name": "GENESIS API v2.1",
+    "_postman_id": "genesis-api-v2-1",
+    "description": "Complete GENESIS API collection for testing all endpoints.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {"key": "base_url", "value": "http://localhost:8000", "type": "string"},
+    {"key": "token", "value": "", "type": "string"}
+  ],
   "item": [
     {
-      "name": "Learn",
-      "request": {
-        "method": "POST",
-        "url": "{{base_url}}/core/learn",
-        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-        "body": { "mode": "raw", "raw": "{\"source\": \"https://example.com\"}", "options": { "raw": { "language": "json" } } }
-      }
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "event": [{"listen": "test", "script": {"exec": ["var json = pm.response.json();", "pm.collectionVariables.set('token', json.access_token);", "pm.test('Status 200', () => pm.response.to.have.status(200));", "pm.test('Has access_token', () => pm.expect(json.access_token).to.be.a('string'));"]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"email\": \"admin@genesis.ai\", \"password\": \"Genesis@2024!\"}"},
+            "url": "{{base_url}}/api/v1/auth/login"
+          }
+        },
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"username\": \"testuser\", \"email\": \"test@example.com\", \"password\": \"Test@12345!\"}"},
+            "url": "{{base_url}}/api/v1/auth/register"
+          }
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": "{{base_url}}/api/v1/auth/me"
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": "{{base_url}}/api/v1/auth/logout"
+          }
+        },
+        {
+          "name": "OTP Send",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"phone\": \"+1234567890\"}"},
+            "url": "{{base_url}}/api/v1/auth/otp/send"
+          }
+        },
+        {
+          "name": "OTP Verify",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"phone\": \"+1234567890\", \"code\": \"123456\"}"},
+            "url": "{{base_url}}/api/v1/auth/otp/verify"
+          }
+        }
+      ]
     },
     {
-      "name": "Ask",
-      "request": {
-        "method": "POST",
-        "url": "{{base_url}}/core/ask",
-        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-        "body": { "mode": "raw", "raw": "{\"query\": \"What is backpropagation?\"}" , "options": { "raw": { "language": "json" } } }
-      }
+      "name": "Core AI",
+      "item": [
+        {
+          "name": "Ask",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"query\": \"What is self-attention in transformers?\", \"module\": \"m1\", \"temperature\": 0.7, \"max_tokens\": 512}"},
+            "url": "{{base_url}}/api/v1/core/ask"
+          }
+        },
+        {
+          "name": "Learn from URL",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"source\": \"https://en.wikipedia.org/wiki/Transformer_(machine_learning_model)\", \"source_type\": \"url\"}"},
+            "url": "{{base_url}}/api/v1/core/learn"
+          }
+        },
+        {
+          "name": "Learn from text",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"source\": \"The transformer architecture relies on multi-head attention to process sequential data in parallel.\", \"source_type\": \"text\"}"},
+            "url": "{{base_url}}/api/v1/core/learn"
+          }
+        },
+        {
+          "name": "Auto Route",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"query\": \"Simulate a 20% interest rate hike impact on housing markets\"}"},
+            "url": "{{base_url}}/api/v1/core/route"
+          }
+        }
+      ]
     },
     {
-      "name": "Stats",
-      "request": { "method": "GET", "url": "{{base_url}}/core/stats", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }] }
+      "name": "Conversations",
+      "item": [
+        {
+          "name": "List conversations",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {"raw": "{{base_url}}/api/v1/conversations?skip=0&limit=20", "query": [{"key": "skip", "value": "0"}, {"key": "limit", "value": "20"}]}
+          }
+        },
+        {
+          "name": "Create conversation",
+          "event": [{"listen": "test", "script": {"exec": ["var json = pm.response.json();", "pm.collectionVariables.set('conv_id', json.id);"]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"title\": \"Transformer research session\", \"module\": \"m1\"}"},
+            "url": "{{base_url}}/api/v1/conversations"
+          }
+        },
+        {
+          "name": "Send message",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"content\": \"Explain the difference between encoder-only and decoder-only transformers\", \"role\": \"user\"}"},
+            "url": "{{base_url}}/api/v1/conversations/{{conv_id}}/messages"
+          }
+        },
+        {
+          "name": "Get conversation",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": "{{base_url}}/api/v1/conversations/{{conv_id}}"
+          }
+        },
+        {
+          "name": "Delete conversation",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": "{{base_url}}/api/v1/conversations/{{conv_id}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "List users",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": "{{base_url}}/api/v1/admin/users"
+          }
+        },
+        {
+          "name": "Login history",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": "{{base_url}}/api/v1/admin/login-history"
+          }
+        },
+        {
+          "name": "Login history CSV",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": "{{base_url}}/api/v1/admin/login-history/export"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));", "pm.test('Status ok', () => pm.expect(pm.response.json().status).to.equal('ok'));"]}}],
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/health"
+          }
+        }
+      ]
     }
-  ],
-  "variable": [
-    { "key": "base_url", "value": "http://localhost:8000/api/v1" },
-    { "key": "token",    "value": "" }
   ]
 }

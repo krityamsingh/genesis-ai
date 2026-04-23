@@ -1,52 +1,32 @@
-// ── pages/AuthCallback.jsx ────────────────────────────────────────────────────
+// frontend/src/pages/AuthCallback.jsx — handles Google OAuth redirect
+// Reads tokens from URL params, stores them, routes to setup-name or chat.
 import { useEffect } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import useGenesisStore from '../store/genesisStore'
+import { useNavigate } from 'react-router-dom'
 
 export default function AuthCallback() {
-  const [params]           = useSearchParams()
-  const navigate           = useNavigate()
-  const { loginWithToken } = useGenesisStore()
+  const navigate = useNavigate()
 
   useEffect(() => {
-    const accessToken  = params.get('access_token')
-    const refreshToken = params.get('refresh_token')
-    const error        = params.get('error')
+    const params = new URLSearchParams(window.location.search)
+    const access  = params.get('access_token')
+    const refresh = params.get('refresh_token')
+    const needsNs = params.get('needs_name_setup') === 'true'
+    const err     = params.get('error')
 
-    if (error) {
-      navigate('/login?error=' + error, { replace: true })
+    if (err || !access) {
+      navigate('/login?error=oauth_failed', { replace: true })
       return
     }
-    if (accessToken) {
-      loginWithToken(accessToken, refreshToken)
-      navigate('/dashboard', { replace: true })
-    } else {
-      navigate('/login?error=missing_token', { replace: true })
-    }
-  }, []) // eslint-disable-line
+
+    localStorage.setItem('genesis_token',  access)
+    if (refresh) localStorage.setItem('genesis_refresh', refresh)
+
+    navigate(needsNs ? '/setup-name' : '/chat', { replace: true })
+  }, [navigate])
 
   return (
-    <div style={{
-      height:         '100vh',
-      display:        'flex',
-      alignItems:     'center',
-      justifyContent: 'center',
-      background:     'var(--bg-base)',
-      flexDirection:  'column',
-      gap:            '16px',
-    }}>
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-      `}</style>
-      <div style={{
-        width:        '40px',
-        height:       '40px',
-        border:       '2px solid var(--border-default)',
-        borderTopColor: 'var(--accent)',
-        borderRadius: '50%',
-        animation:    'spin 0.8s linear infinite',
-      }} />
-      <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Signing you in...</span>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <p style={{ color: '#6B7280', fontSize: 14 }}>Completing sign in…</p>
     </div>
   )
 }

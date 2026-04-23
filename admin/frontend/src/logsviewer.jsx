@@ -1,110 +1,226 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react'
+// logsviewer.jsx — System logs with level filter, search, auto-scroll
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import axios from 'axios'
+import { C, F, card, btn, input, apiHeaders } from './design'
 
-const api = (token) => ({ headers: { Authorization: `Bearer ${token}` } })
-
-function lineColor(line) {
-  if (/ERROR|CRITICAL|error|critical/i.test(line)) return '#ff6060'
-  if (/WARN|warning/i.test(line))  return '#ffcc00'
-  if (/INFO|info/i.test(line))     return '#8ab0cc'
-  if (/DEBUG/i.test(line))         return '#4a6080'
-  return '#6a8aa0'
+const LEVEL_COLORS = {
+  ERROR:   { bg: '#FEE2E2', color: '#B91C1C', dot: '#EF4444' },
+  WARN:    { bg: '#FEF3C7', color: '#92400E', dot: '#F59E0B' },
+  WARNING: { bg: '#FEF3C7', color: '#92400E', dot: '#F59E0B' },
+  INFO:    { bg: '#EFF6FF', color: '#1D4ED8', dot: '#3B82F6' },
+  DEBUG:   { bg: '#F0FDF4', color: '#15803D', dot: '#10B981' },
 }
 
-export default function LogsViewer({ token }) {
-  const [lines,   setLines]   = useState([])
-  const [n,       setN]       = useState(100)
-  const [loading, setLoading] = useState(false)
-  const [auto,    setAuto]    = useState(true)
-  const [filter,  setFilter]  = useState('')
-  const bottom = useRef(null)
+function parseLevel(line) {
+  const upper = line.toUpperCase()
+  if (upper.includes('[ERROR]') || upper.includes('ERROR:')) return 'ERROR'
+  if (upper.includes('[WARN]')  || upper.includes('WARNING')) return 'WARN'
+  if (upper.includes('[DEBUG]') || upper.includes('DEBUG:')) return 'DEBUG'
+  return 'INFO'
+}
+
+function parseModule(line) {
+  const m = line.match(/\[(m[1-6]|core|auth|admin|database)\]/i)
+  return m ? m[1].toUpperCase() : null
+}
+
+function LogLine({ line, search, showTimestamp }) {
+  const level = parseLevel(line)
+  const mod   = parseModule(line)
+  const style = LEVEL_COLORS[level] || LEVEL_COLORS.INFO
+
+  // Highlight search term
+  const highlight = (text) => {
+    if (!search) return text
+    const idx = text.toLowerCase().indexOf(search.toLowerCase())
+    if (idx === -1) return text
+    return (
+      <>
+        {text.slice(0, idx)}
+        <mark style={{ background: '#FEF08A', padding: 0 }}>{text.slice(idx, idx + search.length)}</mark>
+        {text.slice(idx + search.length)}
+      </>
+    )
+  }
+
+  return (
+    <div style={{
+      display: 'flex', gap: 8, padding: '4px 12px',
+      borderLeft: `3px solid ${style.dot}`,
+      background: level === 'ERROR' ? '#FFF5F5' : 'transparent',
+      fontFamily: F.mono, fontSize: 12, lineHeight: 1.6,
+      borderBottom: '1px solid #F1F5F9',
+    }}>
+      <span style={{
+        flexShrink: 0, padding: '1px 5px', borderRadius: 3,
+        background: style.bg, color: style.color,
+        fontSize: 9, fontWeight: 700, alignSelf: 'flex-start', marginTop: 2,
+        letterSpacing: '0.04em', minWidth: 38, textAlign: 'center',
+      }}>
+        {level.slice(0, 4)}
+      </span>
+      {mod && (
+        <span style={{
+          flexShrink: 0, padding: '1px 5px', borderRadius: 3,
+          background: '#F0F7FF', color: C.blue,
+          fontSize: 9, fontWeight: 700, alignSelf: 'flex-start', marginTop: 2,
+        }}>{mod}</span>
+      )}
+      <span style={{ flex: 1, color: level === 'ERROR' ? '#991B1B' : level === 'WARN' ? '#78350F' : C.textPrimary, wordBreak: 'break-all' }}>
+        {highlight(line)}
+      </span>
+    </div>
+  )
+}
+
+export default function LogsViewer({ token, toast }) {
+  const [rawLines, setRawLines] = useState([])
+  const [loading,  setLoading]  = useState(false)
+  const [lines,    setLines]    = useState(500)
+  const [search,   setSearch]   = useState('')
+  const [levelFilter, setLevelFilter] = useState('ALL')
+  const [autoScroll, setAutoScroll]   = useState(true)
+  const [lastFetch,  setLastFetch]    = useState(null)
+  const bottomRef = useRef(null)
+  const containerRef = useRef(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const { data } = await axios.get(`/api/v1/admin/logs?n=${n}`, api(token))
-      setLines(data.lines || [])
-    } catch(e) { console.error(e) }
+      const { data } = await axios.get(`/api/v1/admin/logs?lines=${lines}`, apiHeaders(token))
+      const raw = typeof data === 'string' ? data : (data.logs || data.content || '')
+      const parsed = raw.split('\n').filter(Boolean)
+      setRawLines(parsed)
+      setLastFetch(new Date())
+    } catch { toast?.('Failed to load logs', 'error') }
     finally { setLoading(false) }
-  }, [token, n])
+  }, [token, lines])
+
+  useEffect(() => { load() }, [load])
 
   useEffect(() => {
-    load()
-    if (!auto) return
-    const t = setInterval(load, 5000)
-    return () => clearInterval(t)
-  }, [load, auto])
+    if (autoScroll && bottomRef.current) {
+      bottomRef.current.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [rawLines, autoScroll])
 
-  useEffect(() => {
-    if (auto) bottom.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [lines, auto])
+  const filtered = rawLines.filter(line => {
+    if (levelFilter !== 'ALL') {
+      const lvl = parseLevel(line)
+      if (lvl !== levelFilter && !(levelFilter === 'WARN' && lvl === 'WARNING')) return false
+    }
+    if (search && !line.toLowerCase().includes(search.toLowerCase())) return false
+    return true
+  })
 
-  const displayed = filter
-    ? lines.filter(l => l.toLowerCase().includes(filter.toLowerCase()))
-    : lines
+  const errorCount = rawLines.filter(l => parseLevel(l) === 'ERROR').length
+  const warnCount  = rawLines.filter(l => ['WARN', 'WARNING'].includes(parseLevel(l))).length
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* Toolbar */}
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        <input
-          value={filter} onChange={e => setFilter(e.target.value)}
-          placeholder="Filter logs…"
-          style={{
-            flex: 1, minWidth: 180,
-            background: 'rgba(0,245,255,0.04)', border: '1px solid rgba(0,245,255,0.15)',
-            borderRadius: 3, padding: '7px 12px', color: '#e0f0ff', fontSize: 12,
-            fontFamily: 'inherit', outline: 'none',
-          }}
-        />
-        <select value={n} onChange={e => setN(+e.target.value)} style={{
-          background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(0,245,255,0.15)',
-          borderRadius: 3, padding: '7px 10px', color: '#8ab0cc', fontSize: 11,
-          fontFamily: 'inherit',
-        }}>
-          {[50,100,200,500].map(v => <option key={v} value={v}>{v} lines</option>)}
-        </select>
-        <button onClick={() => setAuto(!auto)} style={{
-          background: auto ? 'rgba(0,255,150,0.08)' : 'rgba(0,0,0,0.3)',
-          border: `1px solid ${auto ? 'rgba(0,255,150,0.25)' : 'rgba(0,245,255,0.12)'}`,
-          borderRadius: 3, color: auto ? '#00ff96' : '#4a6080', fontSize: 10,
-          padding: '7px 14px', cursor: 'pointer', fontFamily: 'inherit', letterSpacing: 1,
-        }}>
-          {auto ? '⏸ LIVE' : '▶ LIVE'}
-        </button>
-        <button onClick={load} style={{
-          background: 'rgba(0,245,255,0.06)', border: '1px solid rgba(0,245,255,0.15)',
-          borderRadius: 3, color: '#00f5ff', fontSize: 10,
-          padding: '7px 14px', cursor: 'pointer', fontFamily: 'inherit', letterSpacing: 1,
-        }}>↺ REFRESH</button>
-      </div>
+    <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14, animation: 'fadeIn 200ms ease' }}>
 
-      {/* Log terminal */}
-      <div style={{
-        background: '#020810',
-        border: '1px solid rgba(0,245,255,0.1)',
-        borderRadius: 4, overflow: 'auto',
-        height: 480, padding: '16px 20px',
-        fontFamily: "'JetBrains Mono','Fira Code',monospace",
-      }}>
-        {loading && lines.length === 0 ? (
-          <div style={{ color: '#4a6080', fontSize: 12 }}>≡ LOADING LOGS…</div>
-        ) : displayed.length === 0 ? (
-          <div style={{ color: '#3d5a72', fontSize: 12 }}>No log lines {filter ? 'matching filter' : 'found'}.</div>
-        ) : displayed.map((line, i) => (
-          <div key={i} style={{
-            fontSize: 11, lineHeight: 1.7, color: lineColor(line),
-            borderBottom: i < displayed.length - 1 ? '1px solid rgba(0,245,255,0.02)' : 'none',
-            padding: '1px 0', wordBreak: 'break-all',
+      {/* Stats */}
+      <div style={{ display: 'flex', gap: 8 }}>
+        {[
+          { label: 'Total Lines', value: rawLines.length, color: C.textSecondary },
+          { label: 'Errors',      value: errorCount,      color: errorCount > 0 ? '#B91C1C' : C.textSecondary },
+          { label: 'Warnings',    value: warnCount,       color: warnCount > 0  ? '#78350F' : C.textSecondary },
+          { label: 'Showing',     value: filtered.length, color: C.blue },
+        ].map(({ label, value, color }) => (
+          <div key={label} style={{
+            ...card({ padding: '10px 16px', flex: 1 }),
+            textAlign: 'center',
           }}>
-            {line}
+            <div style={{ fontSize: 20, fontWeight: 800, color, letterSpacing: -0.5 }}>{value}</div>
+            <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: 2 }}>{label}</div>
           </div>
         ))}
-        <div ref={bottom}/>
       </div>
-      <div style={{ fontSize: 10, color: '#2a4a60', letterSpacing: 1 }}>
-        {displayed.length} / {lines.length} LINES · {auto ? 'AUTO-REFRESH 5s' : 'PAUSED'}
+
+      {/* Controls */}
+      <div style={{
+        ...card({ padding: '12px 14px' }),
+        display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center',
+      }}>
+        {/* Search */}
+        <div style={{ position: 'relative', flex: '1 1 200px' }}>
+          <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: C.textMuted, pointerEvents: 'none', fontSize: 13 }}>⌕</span>
+          <input
+            placeholder="Search logs…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{ ...input(), paddingLeft: 30, fontSize: 13 }}
+          />
+        </div>
+
+        {/* Level filter buttons */}
+        <div style={{ display: 'flex', gap: 4, background: C.bgMuted, borderRadius: 8, padding: 3 }}>
+          {['ALL', 'INFO', 'WARN', 'ERROR', 'DEBUG'].map(lv => {
+            const s = LEVEL_COLORS[lv === 'ALL' ? 'INFO' : lv] || LEVEL_COLORS.INFO
+            return (
+              <button key={lv} onClick={() => setLevelFilter(lv)} style={{
+                padding: '5px 10px', borderRadius: 6, border: 'none',
+                background: levelFilter === lv ? (lv === 'ALL' ? C.bgCard : s.bg) : 'transparent',
+                color: levelFilter === lv ? (lv === 'ALL' ? C.textPrimary : s.color) : C.textSecondary,
+                fontSize: 11, fontWeight: levelFilter === lv ? 700 : 400,
+                cursor: 'pointer',
+                boxShadow: levelFilter === lv ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+              }}>{lv}</button>
+            )
+          })}
+        </div>
+
+        {/* Lines selector */}
+        <select
+          value={lines}
+          onChange={e => setLines(Number(e.target.value))}
+          style={{ ...input(), width: 120, fontSize: 13, appearance: 'none', cursor: 'pointer' }}
+        >
+          {[100, 200, 500, 1000, 2000].map(n => (
+            <option key={n} value={n}>{n} lines</option>
+          ))}
+        </select>
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer', userSelect: 'none', color: C.textSecondary }}>
+          <input type="checkbox" checked={autoScroll} onChange={e => setAutoScroll(e.target.checked)} />
+          Auto-scroll
+        </label>
+
+        <button onClick={load} disabled={loading} style={{ ...btn('primary'), fontSize: 13 }}>
+          {loading ? <><span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⟳</span> Loading…</> : '↺ Refresh'}
+        </button>
       </div>
+
+      {/* Log viewer */}
+      <div
+        ref={containerRef}
+        style={{
+          ...card(),
+          overflow: 'auto',
+          height: 'calc(100vh - 380px)',
+          minHeight: 300,
+          background: '#FAFBFC',
+        }}
+      >
+        {loading && rawLines.length === 0 && (
+          <div style={{ padding: 24, textAlign: 'center', color: C.textMuted, fontSize: 13 }}>Loading logs…</div>
+        )}
+        {!loading && filtered.length === 0 && (
+          <div style={{ padding: 24, textAlign: 'center', color: C.textMuted, fontSize: 13 }}>
+            {search || levelFilter !== 'ALL' ? 'No log lines match your filters.' : 'No log data available.'}
+          </div>
+        )}
+        {filtered.map((line, i) => (
+          <LogLine key={i} line={line} search={search} />
+        ))}
+        <div ref={bottomRef} />
+      </div>
+
+      {lastFetch && (
+        <div style={{ fontSize: 11, color: C.textMuted, textAlign: 'center' }}>
+          Last refreshed: {lastFetch.toLocaleTimeString()} · {filtered.length} lines shown of {rawLines.length} total
+        </div>
+      )}
     </div>
   )
 }

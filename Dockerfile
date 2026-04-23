@@ -1,68 +1,53 @@
-# Dockerfile
-# GENESIS — Multi-stage build
-#
-# Fixes applied:
-#   • Added non-root user (app:app) — running as root inside container is
-#     a security risk; any path traversal or injection gives attacker root
-#   • Port standardized to 8080 everywhere (was 8000 in config/base.yaml,
-#     8080 in Dockerfile — now consistent)
-#   • pip upgraded before installing deps (avoids old-pip install bugs)
-#   • .dockerignore should exclude: .env, __pycache__, *.pyc, node_modules,
-#     frontend/dist (rebuilt inside), .git
-# =============================================================================
+# ─────────────────────────────────────────────────────────────────────────────
+# GENESIS v3 — Multi-stage Docker build
+# Stage 1: Build React frontend
+# Stage 2: Production Python API
+# ─────────────────────────────────────────────────────────────────────────────
 
-# ─── Stage 1: Build the React frontend ───────────────────────────────────────
-FROM node:20-alpine AS frontend-builder
+# ── Stage 1: Frontend build ───────────────────────────────────────────────────
+FROM node:20-alpine AS frontend-build
+WORKDIR /app/frontend
 
-WORKDIR /frontend
-
-# Copy package files first for better layer caching
-COPY frontend/package.json ./
-RUN npm install
+COPY frontend/package*.json ./
+RUN npm ci --prefer-offline
 
 COPY frontend/ ./
-
-# Vite expects index.html at the project root (not inside public/)
-RUN if [ ! -f index.html ] && [ -f public/index.html ]; then cp public/index.html index.html; fi
-
+ARG VITE_API_URL=/api/v1
+ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
-# Output: /frontend/dist
 
+# ── Stage 2: API image ────────────────────────────────────────────────────────
+FROM python:3.11-slim AS api
 
-# ─── Stage 2: Python API + built frontend ────────────────────────────────────
-FROM python:3.11-slim
+# System deps
+# NOTE: libmagic1 was renamed to libmagic1t64 in Debian Trixie (python:3.11-slim base)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential curl git ffmpeg libmagic1t64 \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# System deps
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends gcc libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+# Python deps (cached layer)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Upgrade pip to avoid installation issues with newer packages
-RUN pip install --no-cache-dir --upgrade pip
-
-# Python deps — use Railway-slim (no torch/transformers, saves ~3 GB)
-COPY requirements-railway.txt .
-RUN pip install --no-cache-dir -r requirements-railway.txt
-
-# Copy application source
+# Copy source
 COPY . .
 
-# Copy built frontend from Stage 1
-COPY --from=frontend-builder /frontend/dist ./frontend/dist
+# Inject built frontend
+COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 
-# ── Security: run as non-root ─────────────────────────────────────────────────
-# Create a dedicated app user and group
-RUN groupadd --system app && useradd --system --gid app --no-create-home app
+# Non-root user
+RUN useradd -m -u 1000 genesis && chown -R genesis:genesis /app
+USER genesis
 
-# Give the app user ownership of the working directory
-# (needed for SQLite db file creation and any local writes)
-RUN chown -R app:app /app
-
-USER app
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PORT=8080
 
 EXPOSE 8080
 
-# Railway injects PORT at runtime; default to 8080 to match EXPOSE
-CMD ["sh", "-c", "uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "2"]

@@ -9,7 +9,9 @@
 #   • Conversation router registered
 #   • All SQLAlchemy/Alembic imports removed
 #   • close_db() called on shutdown
+
 #   • module_loader.load_from_registry() called at startup
+krityam-All
 # =============================================================================
 
 from __future__ import annotations

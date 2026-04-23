@@ -1,13 +1,78 @@
 {
-  "texts": [
-    "Python decorators are a design pattern that allows behaviour to be added to functions.",
-    "Transformers use self-attention to process all tokens in parallel.",
-    "Gradient descent minimises loss by moving in the direction of the negative gradient."
+  "users": [
+    {
+      "username": "admin",
+      "email": "admin@genesis.ai",
+      "display_name": "GENESIS Admin",
+      "is_admin": true,
+      "is_active": true
+    },
+    {
+      "username": "researcher_alice",
+      "email": "alice@research.lab",
+      "display_name": "Alice Chen",
+      "is_admin": false,
+      "is_active": true
+    },
+    {
+      "username": "developer_bob",
+      "email": "bob@dev.io",
+      "display_name": "Bob Kumar",
+      "is_admin": false,
+      "is_active": true
+    }
   ],
-  "urls": [],
-  "questions": [
-    "What is a Python decorator?",
-    "How does self-attention work?",
-    "What is gradient descent?"
+  "sample_queries": [
+    {"query": "What is self-attention?", "expected_module": "m1"},
+    {"query": "Research the latest papers on sparse attention", "expected_module": "m2"},
+    {"query": "Build a sentiment analysis API", "expected_module": "m3"},
+    {"query": "Reconstruct the history of deep learning from 2006 to present", "expected_module": "m4"},
+    {"query": "What are the gaps in our knowledge of consciousness?", "expected_module": "m5"},
+    {"query": "Simulate a 30% global GPU shortage scenario", "expected_module": "m6"},
+    {"query": "Quiz me on convolutional neural networks", "expected_module": "m1"},
+    {"query": "Generate flashcards about LSTM vs Transformer", "expected_module": "m1"}
+  ],
+  "sample_knowledge": [
+    {
+      "source": "text",
+      "content": "The Transformer architecture was introduced in the paper 'Attention Is All You Need' by Vaswani et al. in 2017. It relies entirely on an attention mechanism, dispensing with recurrence and convolutions entirely.",
+      "tags": ["transformer", "attention", "architecture", "NLP"]
+    },
+    {
+      "source": "text",
+      "content": "BERT (Bidirectional Encoder Representations from Transformers) is a pre-trained transformer model developed by Google. It uses bidirectional training of Transformer and was released in 2018.",
+      "tags": ["BERT", "Google", "pretraining", "bidirectional"]
+    },
+    {
+      "source": "text",
+      "content": "GPT (Generative Pre-trained Transformer) is a series of language models by OpenAI. GPT-4 (2023) is a multimodal model capable of processing images and text. The architecture is decoder-only.",
+      "tags": ["GPT", "OpenAI", "language model", "decoder"]
+    },
+    {
+      "source": "text",
+      "content": "Flash Attention (Dao et al., 2022) is an IO-aware exact attention algorithm that uses tiling to reduce memory reads/writes. It achieves 2-4x speedup and 5-20x memory reduction over standard attention.",
+      "tags": ["Flash Attention", "efficiency", "memory", "speed"]
+    }
+  ],
+  "training_jobs": [
+    {
+      "job_id": "train_001",
+      "domain": "medical",
+      "status": "completed",
+      "dataset_size": 5000,
+      "epochs": 3,
+      "final_loss": 0.243,
+      "created_at": "2026-04-01T09:00:00Z",
+      "completed_at": "2026-04-01T11:30:00Z"
+    },
+    {
+      "job_id": "train_002",
+      "domain": "legal",
+      "status": "running",
+      "dataset_size": 12000,
+      "epochs": 5,
+      "progress": 0.62,
+      "created_at": "2026-04-20T14:00:00Z"
+    }
   ]
 }

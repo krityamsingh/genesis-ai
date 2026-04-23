@@ -1,6 +1,10 @@
-# ============================================================
 # core/pipeline.py
 # GENESIS — 12-Layer Filter Pipeline Runner
+#
+# FIXES (Layer Linkage):
+#   • L12 (self-heal) added to _LAYERS registry — was missing entirely,
+#     meaning self-heal never ran even though l12_self_heal.py existed.
+#   • L12 provider added to LAYER_PROVIDERS in caller.py (also fixed).
 #
 # Runs all 12 filter layers in sequence on a piece of code.
 # Hard stops on Layer 1 (syntax) and Layer 7 (security).
@@ -9,7 +13,7 @@
 # Usage:
 #   from core.pipeline import run_pipeline
 #   result = run_pipeline(code="print('hello')", task="print hello")
-# ============================================================
+# =============================================================================
 
 from __future__ import annotations
 
@@ -27,9 +31,11 @@ from layers.l08_compliance   import run as l08
 from layers.l09_performance  import run as l09
 from layers.l10_quality      import run as l10
 from layers.l11_alignment    import run as l11
+from layers.l12_self_heal    import run as l12  # ✅ FIX: was missing
 
 
 # Layer registry — id, run function, hard_stop flag
+# ✅ FIX: L12 added — self-heal layer was defined but never registered
 _LAYERS = [
     (1,  l01, True),
     (2,  l02, False),
@@ -42,6 +48,7 @@ _LAYERS = [
     (9,  l09, False),
     (10, l10, False),
     (11, l11, False),
+    (12, l12, False),   # ✅ Self-heal — runs last, no hard stop
 ]
 
 
@@ -114,7 +121,7 @@ def run_fast_pipeline(code: str, task: str) -> PipelineResult:
     return run_pipeline(
         code=code,
         task=task,
-        skip_layers=[3, 4, 5, 6, 7, 8, 9, 11],
+        skip_layers=[3, 4, 5, 6, 7, 8, 9, 11, 12],
         stop_on_first=True,
     )
 
@@ -127,5 +134,5 @@ def run_security_only(code: str, task: str) -> PipelineResult:
     return run_pipeline(
         code=code,
         task=task,
-        skip_layers=[1, 2, 3, 4, 5, 9, 10, 11],
+        skip_layers=[1, 2, 3, 4, 5, 9, 10, 11, 12],
     )

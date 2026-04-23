@@ -1,21 +1,56 @@
 {
-  "extraction": {
-    "domain": "programming",
-    "difficulty": "intermediate",
-    "main_topics": ["decorators", "design patterns"],
-    "key_facts": ["@syntax wraps functions", "used in Flask/FastAPI"],
-    "skills": [{"name": "Python Decorators", "level": "intermediate", "domain": "programming", "description": "Using @ syntax", "prerequisites": ["Python basics"], "related": ["closures"]}],
-    "concepts": [{"name": "Decorator Pattern", "definition": "Adds behaviour without modifying original", "domain": "programming", "examples": ["@app.route"], "key_terms": ["wrapper", "closure"]}],
-    "summary": "Decorators allow extending function behaviour using the @ syntax."
+  "gemma_responses": {
+    "what_is_attention": "Self-attention is a mechanism that allows each position in a sequence to attend to all positions in the same sequence. It computes a weighted sum of values, where the weights are determined by the compatibility of a query with corresponding keys. This allows the model to capture long-range dependencies efficiently.",
+    "quiz_transformers": "{\"questions\": [{\"question\": \"What does the Q in QKV stand for?\", \"options\": {\"A\": \"Query\", \"B\": \"Queue\", \"C\": \"Quotient\", \"D\": \"Qualifier\"}, \"answer\": \"A\", \"explanation\": \"Q stands for Query in the attention mechanism.\"}, {\"question\": \"What is the purpose of positional encoding?\", \"options\": {\"A\": \"Reduce computation\", \"B\": \"Add sequence order information\", \"C\": \"Normalize activations\", \"D\": \"Prevent overfitting\"}, \"answer\": \"B\", \"explanation\": \"Positional encoding injects information about the relative or absolute position of tokens.\"}]}",
+    "flashcards_attention": "{\"cards\": [{\"front\": \"What is multi-head attention?\", \"back\": \"Multi-head attention runs h attention functions in parallel on projected queries, keys, and values, allowing the model to attend to information from different representation subspaces.\"}, {\"front\": \"What is the softmax in attention for?\", \"back\": \"The softmax normalises the dot products of queries and keys to produce attention weights that sum to 1, determining how much focus to place on each value.\"}]}"
   },
-  "learn_response": {
-    "response": "Learned successfully.",
-    "knowledge_items_stored": 5,
-    "domain": "programming",
-    "difficulty": "intermediate",
-    "skills_found": 1,
-    "concepts_found": 1,
-    "duration_sec": 1.2,
-    "error": null
+  "auth_responses": {
+    "login_success": {
+      "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0QGV4YW1wbGUuY29tIiwianRpIjoiYWJjMTIzIiwiZXhwIjoxNzQ1MDAwMDAwfQ.SIGNATURE",
+      "token_type": "bearer",
+      "user": {
+        "id": "64f3a1b2c3d4e5f6a7b8c9d0",
+        "username": "testuser",
+        "email": "test@example.com",
+        "is_admin": false,
+        "display_name": "Test User"
+      }
+    },
+    "login_fail": {
+      "detail": "Invalid email or password",
+      "error_code": "AUTH_INVALID_CREDENTIALS"
+    },
+    "rate_limited": {
+      "detail": "Too many login attempts. Try again in 60 seconds.",
+      "error_code": "RATE_LIMIT_EXCEEDED"
+    }
+  },
+  "conversation_responses": {
+    "create": {
+      "id": "65a1b2c3d4e5f6a7b8c9d0e1",
+      "user_id": "64f3a1b2c3d4e5f6a7b8c9d0",
+      "title": "Transformer research session",
+      "module": "m1",
+      "created_at": "2026-04-21T10:00:00Z",
+      "last_message_at": "2026-04-21T10:00:00Z",
+      "is_archived": false
+    },
+    "message": {
+      "id": "65a1b2c3d4e5f6a7b8c9d0e2",
+      "conversation_id": "65a1b2c3d4e5f6a7b8c9d0e1",
+      "role": "assistant",
+      "content": "Self-attention allows each token to attend to every other token in the sequence...",
+      "created_at": "2026-04-21T10:00:05Z"
+    }
+  },
+  "module_responses": {
+    "list": [
+      {"key": "m1", "name": "Self-Learner", "enabled": true, "description": "Knowledge ingestion and teaching"},
+      {"key": "m2", "name": "Research Accelerator", "enabled": true, "description": "Paper parsing and hypothesis generation"},
+      {"key": "m3", "name": "AI Builder", "enabled": false, "description": "Code generation and architecture design"},
+      {"key": "m4", "name": "Time Reconstruct", "enabled": true, "description": "Timeline reconstruction and future projection"},
+      {"key": "m5", "name": "Intuition Engine", "enabled": true, "description": "Bayesian reasoning and gap filling"},
+      {"key": "m6", "name": "Reality Sim", "enabled": false, "description": "Scenario simulation and world modelling"}
+    ]
   }
 }

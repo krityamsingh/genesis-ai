@@ -3,30 +3,35 @@
     {
       "key": "default",
       "hf_id": "google/gemma-3-27b-it",
-      "description": "Gemma 3 27B — best quality, vision-capable",
+      "description": "Gemma 3 27B \u2014 best quality, vision-capable",
       "context_tokens": 8192,
-      "vision": true
+      "vision": true,
+      "type": "base"
     },
     {
       "key": "fast",
       "hf_id": "google/gemma-3-12b-it",
-      "description": "Gemma 3 12B — faster, lower cost",
+      "description": "Gemma 3 12B \u2014 faster, lower cost",
       "context_tokens": 8192,
-      "vision": false
+      "vision": false,
+      "type": "base"
     },
     {
       "key": "mini",
       "hf_id": "google/gemma-3-4b-it",
-      "description": "Gemma 3 4B — quickest, lowest cost",
+      "description": "Gemma 3 4B \u2014 quickest, lowest cost",
       "context_tokens": 4096,
-      "vision": false
+      "vision": false,
+      "type": "base"
     },
     {
       "key": "code",
       "hf_id": "google/codegemma-7b-it",
-      "description": "CodeGemma 7B — code generation specialist",
+      "description": "CodeGemma 7B \u2014 code generation specialist",
       "context_tokens": 8192,
-      "vision": false
+      "vision": false,
+      "type": "base"
     }
-  ]
+  ],
+  "trained_models": []
 }
