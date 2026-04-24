@@ -104,6 +104,34 @@ async def lifespan(app: FastAPI):
     # Singletons
     try:
         init_singletons(app)
+
+        # Phase 7 — telemetry (only if FEATURE_TRACING=on)
+        try:
+            from core.telemetry import setup_telemetry
+            setup_telemetry("genesis-api")
+        except Exception as e:
+            log.warning(f"OTel setup failed (non-fatal): {e}")
+
+        # Phase 5 — plugin autodiscovery (only if FEATURE_PLUGINS=on)
+        try:
+            from config.feature_flags import flags
+            if flags.plugins_enabled:
+                from core.plugins.registry import PluginRegistry
+                PluginRegistry.instance().autodiscover("plugins")
+                log.info(f"Plugins loaded: {[p.name for p in PluginRegistry.instance().list_enabled()]}")
+        except Exception as e:
+            log.warning(f"Plugin autodiscovery failed (non-fatal): {e}")
+
+        # Audit trail
+        from shared.change_log import record
+        record("P1","duplicate-removal","Root-level duplicate files removed")
+        record("P2","unified-config","Pydantic settings active")
+        record("P3","services-layer","Business logic extracted to services/")
+        record("P4","intelligence","ReasoningPipeline, ContextManager, PluginRegistry built")
+        record("P5","switchover","Feature-flag gating on /ask endpoint")
+        record("P6","scalability","Two-tier cache, usage tracking, API keys")
+        record("P7","security","Field encryption, token family, moderation")
+        record("P8","observability","Telemetry, metrics, backup manager")
         log.info("Singletons initialised.")
     except Exception as e:
         log.error(f"Singleton init failed: {e}")

@@ -6,7 +6,7 @@
 #     @lru_cache module globals.
 #   • get_token_from_header promoted to a proper FastAPI Header dependency
 #   • TrainingEngine and DynamicModuleLoader added to init_singletons()
-#   • get_token_claims_dep added for token-claims validation where needed
+#   • require_auth_dep added for protected route dependencies
 # =============================================================================
 
 from __future__ import annotations
@@ -92,13 +92,9 @@ def get_token_claims_dep(
     authorization: Optional[str] = Header(None),
 ) -> dict:
     """
-    FastAPI dependency: validate Bearer token and return decoded claims.
-    Raises HTTP 401 if the token is missing or invalid.
-
-    Usage:
-        @router.get("/something")
-        async def something(claims: dict = Depends(get_token_claims_dep)):
-            ...
+    FastAPI dependency: validate Bearer token and return decoded claims dict.
+    (Renamed from sync require_auth_dep to avoid clash with async version.)
+    Use require_auth_dep (async) for endpoints that need the User document.
     """
     from fastapi import HTTPException, status
     token = None
