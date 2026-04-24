@@ -176,3 +176,99 @@ class RateLimit(Document):
             IndexModel([("key", ASCENDING)], unique=True),
             IndexModel([("expires_at", ASCENDING)], expireAfterSeconds=0),  # TTL
         ]
+
+
+# ════════════════════════════════════════════════════════════════════
+# Phase 4 additions — new documents, zero changes to existing ones
+# ════════════════════════════════════════════════════════════════════
+
+class UserMemory(Document):
+    """Persistent per-user memory (facts, preferences, topic affinity)."""
+    user_id:       str
+    facts:         Dict[str, Any]   = Field(default_factory=dict)
+    preferences:   Dict[str, Any]   = Field(default_factory=dict)
+    summaries:     list             = Field(default_factory=list)
+    topic_affinity: Dict[str, float] = Field(default_factory=dict)
+    updated_at:    datetime         = Field(default_factory=_now)
+    created_at:    datetime         = Field(default_factory=_now)
+
+    class Settings:
+        name = "user_memory"
+        indexes = [IndexModel([("user_id", ASCENDING)], unique=True)]
+
+
+class ReasoningTrace(Document):
+    """Audit log for every pipeline run."""
+    request_id:    str
+    user_id:       Optional[str]    = None
+    intent:        str              = ""
+    module_chosen: str              = ""
+    pipeline_mode: str              = "old"   # old | shadow | new
+    latency_ms:    Dict[str, int]   = Field(default_factory=dict)
+    shadow_diff:   Optional[str]    = None    # diff when shadow mode
+    created_at:    datetime         = Field(default_factory=_now)
+
+    class Settings:
+        name = "reasoning_traces"
+        indexes = [IndexModel([("user_id", ASCENDING)]),
+                   IndexModel([("created_at", ASCENDING)])]
+
+
+class UsageLog(Document):
+    user_id:       str
+    tokens_used:   int              = 0
+    requests_made: int              = 0
+    cost_estimate: float            = 0.0
+    model_used:    str              = ""
+    period_start:  datetime         = Field(default_factory=_now)
+    period_end:    Optional[datetime] = None
+
+    class Settings:
+        name = "usage_logs"
+        indexes = [IndexModel([("user_id", ASCENDING)]),
+                   IndexModel([("period_start", ASCENDING)])]
+
+
+class ApiKey(Document):
+    user_id:       str
+    name:          str
+    key_hash:      str
+    key_prefix:    str
+    scope:         str              = "full"
+    is_active:     bool             = True
+    expires_at:    Optional[datetime] = None
+    last_used_at:  Optional[datetime] = None
+    created_at:    datetime         = Field(default_factory=_now)
+
+    class Settings:
+        name = "api_keys"
+        indexes = [IndexModel([("user_id", ASCENDING)]),
+                   IndexModel([("key_hash", ASCENDING)], unique=True)]
+
+
+class TokenFamily(Document):
+    """JWT refresh token family — supports rotation + theft detection."""
+    user_id:       str
+    family_id:     str
+    refresh_hash:  str
+    is_revoked:    bool             = False
+    issued_at:     datetime         = Field(default_factory=_now)
+    expires_at:    Optional[datetime] = None
+
+    class Settings:
+        name = "token_families"
+        indexes = [IndexModel([("user_id", ASCENDING)]),
+                   IndexModel([("family_id", ASCENDING)])]
+
+
+class ModerationLog(Document):
+    user_id:        Optional[str]   = None
+    input_text:     str
+    violation_type: str
+    action_taken:   str
+    created_at:     datetime        = Field(default_factory=_now)
+
+    class Settings:
+        name = "moderation_logs"
+        indexes = [IndexModel([("user_id", ASCENDING)]),
+                   IndexModel([("created_at", ASCENDING)])]
