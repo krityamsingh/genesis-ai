@@ -78,3 +78,11 @@ structlog>=24.4.0
 # ── Optional: Local model inference ──────────────────────────────────────────
 # torch>=2.4.0               # Uncomment for local GPU inference
 # transformers>=4.46.0
+
+# ── Phase 2-8 Upgrade Dependencies ───────────────────────────────────────────
+pydantic-settings>=2.0.0          # Phase 2: unified config
+cryptography>=41.0.0              # Phase 7: field encryption
+prometheus-fastapi-instrumentator>=6.1.0  # Phase 8: metrics (optional)
+opentelemetry-api>=1.20.0         # Phase 8: tracing (optional)
+opentelemetry-sdk>=1.20.0         # Phase 8: tracing (optional)
+locust>=2.20.0                    # Phase 6: load testing (dev only)
