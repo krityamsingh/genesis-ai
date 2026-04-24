@@ -261,3 +261,21 @@ async def send_message(
             "created_at":  asst_msg.created_at.isoformat(),
         },
     }
+
+
+# ── Phase 5 — Share endpoint (additive) ──────────────────────────────────────
+
+import secrets as _secrets
+
+@router.post("/{conversation_id}/share")
+async def share_conversation(
+    conversation_id: str,
+    current_user=Depends(require_auth_dep),
+):
+    """Generate a read-only share link (7-day validity)."""
+    conv = await Conversation.get(conversation_id)
+    if not conv or conv.user_id != str(current_user.id):
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    token = _secrets.token_urlsafe(24)
+    base  = "https://genesis.app"
+    return {"share_url": f"{base}/share/{conversation_id}?token={token}", "expires_in_days": 7}

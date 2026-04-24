@@ -110,11 +110,68 @@ async def learn(
 @router.post("/ask", response_model=TextResponse)
 async def ask(
     req: QueryRequest,
+    request: Request,
     m1=Depends(get_m1),
     claims: dict = Depends(_user_rate_limit),
 ):
-    log.debug(f"ask: user={claims.get('sub')} query={req.query[:80]}")
-    return TextResponse(result=m1.ask(req.query))
+    """
+    /ask endpoint — feature-flag controlled pipeline switchover (Phase 5).
+    FEATURE_NEW_PIPELINE=off    → old behaviour, identical to v2
+    FEATURE_NEW_PIPELINE=shadow → run both, log diff, return OLD response
+    FEATURE_NEW_PIPELINE=on     → new reasoning pipeline
+    """
+    from config.feature_flags import flags
+
+    user_id = claims.get("sub")
+    log.debug(f"ask: user={user_id} query={req.query[:80]} pipeline={flags.pipeline_mode}")
+
+    # ── OLD path (always available) ──────────────────────────────────────────
+    if not flags.new_pipeline_active:
+        old_response = m1.ask(req.query)
+
+        # Shadow mode: also run new pipeline, log diff, but serve OLD response
+        if flags.shadow_mode:
+            import asyncio
+            try:
+                router_obj = get_router(request)
+                engine_obj = get_engine(request)
+                from core.reasoning_pipeline import ReasoningPipeline
+                pipeline = ReasoningPipeline(router_obj, engine_obj, m1)
+                new_result = await pipeline.run(req.query, user_id=user_id)
+                new_response = str(new_result.get("response", ""))
+                diff = None if old_response == new_response else (
+                    f"old_len={len(old_response)} new_len={len(new_response)}")
+                # Log trace with diff
+                try:
+                    from database.models_mongo import ReasoningTrace
+                    await ReasoningTrace(
+                        request_id=new_result["trace_id"],
+                        user_id=user_id,
+                        intent=new_result.get("intent",""),
+                        module_chosen=new_result.get("module",""),
+                        pipeline_mode="shadow",
+                        latency_ms=new_result.get("latency_ms",{}),
+                        shadow_diff=diff,
+                    ).insert()
+                except Exception: pass
+                if diff:
+                    log.info(f"[SHADOW] pipeline diff detected: {diff}")
+            except Exception as e:
+                log.warning(f"[SHADOW] new pipeline error (non-fatal): {e}")
+
+        return TextResponse(result=old_response)
+
+    # ── NEW pipeline path ────────────────────────────────────────────────────
+    try:
+        router_obj = get_router(request)
+        engine_obj = get_engine(request)
+        from core.reasoning_pipeline import ReasoningPipeline
+        pipeline = ReasoningPipeline(router_obj, engine_obj, m1)
+        result   = await pipeline.run(req.query, user_id=user_id)
+        return TextResponse(result=str(result.get("response", "")))
+    except Exception as e:
+        log.error(f"New pipeline failed, falling back to old: {e}")
+        return TextResponse(result=m1.ask(req.query))
 
 
 @router.post("/teach", response_model=TextResponse)
