@@ -6,8 +6,6 @@
 #     @lru_cache module globals.
 #   • get_token_from_header promoted to a proper FastAPI Header dependency
 #   • TrainingEngine and DynamicModuleLoader added to init_singletons()
-#   • get_token_claims_dep added for token-claims validation where needed
-# =============================================================================
 
 from __future__ import annotations
 
@@ -97,7 +95,7 @@ def get_token_claims_dep(
 
     Usage:
         @router.get("/something")
-        async def something(claims: dict = Depends(get_token_claims_dep)):
+
             ...
     """
     from fastapi import HTTPException, status
