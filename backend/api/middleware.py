@@ -25,7 +25,7 @@ async def logging_middleware(request: Request, call_next) -> Response:
     start = time.monotonic()
     response: Response = await call_next(request)
     ms = int((time.monotonic() - start) * 1000)
-    log.info(f"[{request_id}] {request.method} {request.url.path} → {response.status_code} ({ms}ms)")
+    log.info(f"[{request_id}] {request.method} {request.url.path} -> {response.status_code} ({ms}ms)")
     response.headers["X-Request-ID"] = request_id
     response.headers["X-Response-Time"] = f"{ms}ms"
     for h, v in SECURITY_HEADERS.items():

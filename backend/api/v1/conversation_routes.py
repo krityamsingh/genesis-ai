@@ -16,11 +16,12 @@ from datetime import datetime
 from typing import Optional
 
 from beanie import PydanticObjectId
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Header, HTTPException, Request, Depends
 from pydantic import BaseModel
 
 from database.models_mongo import Conversation, Message
 from security.jwt_handler  import decode_token
+from api.dependencies import require_auth_dep
 
 log = logging.getLogger("api.v1.conversations")
 

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 # api/main.py
 # GENESIS — FastAPI Application Factory
 #
@@ -11,10 +13,7 @@
 #   • close_db() called on shutdown
 
 #   • module_loader.load_from_registry() called at startup
-krityam-All
 # =============================================================================
-
-from __future__ import annotations
 
 import logging
 import os
@@ -54,8 +53,8 @@ async def lifespan(app: FastAPI):
     try:
         await connect_db()
         log.info("MongoDB connected and Beanie initialised.")
-    except Exception as e:
-        log.error(f"MongoDB init failed (non-fatal): {e}")
+    except Exception:
+        log.exception("MongoDB init failed (non-fatal)")
 
     # Admin password safety
     admin_password = os.getenv("ADMIN_PASSWORD", "")

@@ -54,7 +54,7 @@ test-cov:
 	cd backend && pytest tests/ -v --cov=. --cov-report=term-missing --cov-report=html
 
 dev:
-	cd backend && uvicorn api.main:app --reload --port $(PORT) --log-level info
+	cd backend && uvicorn api.main:app --reload --port $(PORT) --log-level info --env-file ../.env
 
 dev-frontend:
 	cd frontend && npm run dev

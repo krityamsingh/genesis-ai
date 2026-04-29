@@ -73,8 +73,8 @@ class DynamicModuleLoader:
 
         # From MongoDB (may have entries not yet in registry.json)
         try:
-            from database.models_mongo import TrainedModule
-            async for doc in TrainedModule.find(TrainedModule.is_active == True):
+            from database.training_models_mongo import TrainedModule
+            async for doc in TrainedModule.find({"is_active": True}):
                 if doc.key not in self._loaded_keys:
                     self._instantiate_and_register({
                         "key":          doc.key,

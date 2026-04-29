@@ -39,16 +39,14 @@ _EXPIRE_SECS = int(os.getenv("JWT_EXPIRE_HOURS", "24")) * 3600
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def create_token(user_id: str, is_admin: bool = False) -> str:
+def create_token(user_id: str, is_admin: bool = False, jti: Optional[str] = None) -> str:
     """
     Create a signed JWT for the given user.
 
     Args:
         user_id:  The user's UUID string (stored as 'sub' claim)
         is_admin: Whether to embed admin flag in the token
-
-    Returns:
-        Signed JWT string
+        jti:      Optional unique token ID for blacklisting
     """
     now = datetime.now(tz=timezone.utc)
     payload = {
@@ -57,6 +55,9 @@ def create_token(user_id: str, is_admin: bool = False) -> str:
         "iat": now,
         "exp": now + timedelta(seconds=_EXPIRE_SECS),
     }
+    if jti:
+        payload["jti"] = jti
+
     token = jwt.encode(payload, _SECRET, algorithm=_ALGORITHM)
     log.debug(f"Token created for user={user_id} admin={is_admin}")
     return token

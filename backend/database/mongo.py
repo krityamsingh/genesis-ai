@@ -39,9 +39,14 @@ async def connect_db() -> None:
     mongo_url = os.getenv("MONGO_URL", "mongodb://localhost:27017")
     db_name   = os.getenv("MONGO_DB_NAME", "genesis_ai")
 
-    _client = AsyncIOMotorClient(mongo_url)
-    await init_beanie(database=_client[db_name], document_models=_ALL_MODELS)
+    # Compatibility patch for Beanie 2.x + Motor 3.x
+    if not hasattr(AsyncIOMotorClient, "append_metadata"):
+        AsyncIOMotorClient.append_metadata = lambda self, x: None
 
+    _client = AsyncIOMotorClient(mongo_url)
+    db = _client[db_name]
+    log.info(f"Initialising Beanie with db: {db} (type: {type(db)})")
+    await init_beanie(database=db, document_models=_ALL_MODELS)
     log.info(f"MongoDB connected: db={db_name}")
 
 

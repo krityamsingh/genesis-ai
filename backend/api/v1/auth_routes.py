@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import time
@@ -60,7 +61,7 @@ async def login(request: Request, form: OAuth2PasswordRequestForm = Depends()):
         password_ok = verify_password(form.password, stored_hash)
 
         if not user or not password_ok:
-            time.sleep(0.2)
+            await asyncio.sleep(0.2)
             raise HTTPException(status_code=401, detail="Invalid credentials.")
 
         if needs_rehash(user.hashed_pw):
@@ -98,11 +99,9 @@ async def login(request: Request, form: OAuth2PasswordRequestForm = Depends()):
         }
     except HTTPException:
         raise
-    except Exception as e:
-        log.error(f"Login error for user={form.username}: {e}")
+    except Exception:
+        log.exception(f"Login error for user={form.username}")
         raise HTTPException(status_code=500, detail="Authentication service error.")
-
-
 class RefreshBody(BaseModel):
     refresh_token: str
 

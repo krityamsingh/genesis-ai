@@ -39,16 +39,16 @@ async def check_rate_limit(key: str, limit: int = _DEFAULT_LIMIT) -> None:
         existing = await RateLimit.find_one(RateLimit.key == key)
 
         if existing is None:
-            await RateLimit(key=key, count=1, expires_at=expires_at).insert()
-            count = 1
+            await RateLimit(key=key, hits=1, expires_at=expires_at).insert()
+            current_count = 1
         else:
-            existing.count += 1
+            existing.hits += 1
             existing.expires_at = expires_at   # extend TTL on each hit
             await existing.save()
-            count = existing.count
+            current_count = existing.hits
 
-        if count > limit:
-            log.warning(f"Rate limit exceeded: key={key} count={count} limit={limit}")
+        if current_count > limit:
+            log.warning(f"Rate limit exceeded: key={key} count={current_count} limit={limit}")
             raise RateLimitError(
                 f"Rate limit exceeded: {limit} requests per {_WINDOW_SECONDS}s. "
                 "Please slow down."
@@ -83,7 +83,7 @@ async def blacklist_token(jti: str, ttl_seconds: int) -> None:
         expires_at = datetime.utcnow() + timedelta(seconds=max(ttl_seconds, 1))
         existing = await RateLimit.find_one(RateLimit.key == bkey)
         if not existing:
-            await RateLimit(key=bkey, count=1, expires_at=expires_at).insert()
+            await RateLimit(key=bkey, hits=1, expires_at=expires_at).insert()
         log.info(f"Token blacklisted: jti={jti[:8]}... ttl={ttl_seconds}s")
     except Exception as e:
         log.error(f"blacklist_token error: {e}")

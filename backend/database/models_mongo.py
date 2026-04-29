@@ -167,7 +167,7 @@ class OtpCode(Document):
 
 class RateLimit(Document):
     key:        str          # e.g. "login:1.2.3.4", "blacklist:<jti>"
-    count:      int = 1
+    hits:      int = 1
     expires_at: datetime
 
     class Settings:

@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 
@@ -29,7 +30,7 @@ from admin.backend.model_monitor     import model_info
 from admin.backend.module_controller import get_module_states, set_module_enabled
 from admin.backend.user_manager      import list_users, create_user, deactivate_user
 from admin.backend.logs_viewer       import tail_log
-from admin.backend.backup_manager    import backup_kg
+from admin.backend.backup_manager    import run_backup
 from admin.backend.dataset_manager   import list_datasets, delete_dataset
 from admin.backend.prompt_manager    import get_recent_prompts, clear_prompt_logs
 from admin.backend.trainer           import start_training
@@ -144,7 +145,7 @@ async def login(body: LoginBody, request: Request):
 
     except Exception as e:
         # Constant-time sleep to prevent timing-based user enumeration
-        time.sleep(0.3)
+        await asyncio.sleep(0.3)
         log.warning(f"Admin login failed: username={body.username} ip={client_ip} reason={e}")
         raise HTTPException(
             status_code=401,
@@ -234,9 +235,8 @@ async def logs(n: int = 100, _: dict = Depends(_auth)):
 
 @admin_app.post("/backup")
 async def backup(_: dict = Depends(_auth)):
-    # Fix #8: use task-safe getter
-    path = backup_kg(get_kg_for_task())
-    return {"backup_path": path}
+    result = await run_backup()
+    return result
 
 
 # ── Datasets ──────────────────────────────────────────────────────────────────

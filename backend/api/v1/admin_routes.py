@@ -62,10 +62,12 @@ class SavePromptBody(BaseModel):
 async def health():
     try:
         from admin.backend.health_check import system_health
-        return system_health()
+        from api.dependencies import get_kg_for_task, get_engine_for_task
+        from admin.backend.admin_api import _get_memory_for_task
+        return system_health(get_kg_for_task(), get_engine_for_task(), _get_memory_for_task())
     except Exception as e:
-        log.warning(f"/admin/health helper unavailable: {e}")
-        return {"status": "ok", "note": "health_check helper not available"}
+        log.warning(f"/admin/health error: {e}")
+        return {"status": "error", "message": str(e)}
 
 
 # ── Users (Beanie) ────────────────────────────────────────────────────────────
@@ -337,10 +339,9 @@ async def start_training(body: TrainingBody):
 # ── Backup ────────────────────────────────────────────────────────────────────
 
 @router.post("/backup", dependencies=[Depends(_admin)])
-async def backup(kg=Depends(get_kg)):
-    from admin.backend.backup_manager import backup_kg
-    path = backup_kg(kg)
-    return {"backup_path": path, "ok": True}
+async def backup():
+    from admin.backend.backup_manager import run_backup
+    return await run_backup()
 
 
 @router.get("/backups", dependencies=[Depends(_admin)])
