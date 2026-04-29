@@ -2,6 +2,8 @@
 // Polished Claude.ai-style auth: Google, OTP, email/password tabs
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import useGenesisStore from '../store/genesisStore'
+import { authAPI } from '../api/client'
 import '../styles/design-system.css'
 
 const API = '/api/v1'
@@ -44,6 +46,7 @@ function TabButton({ active, onClick, children }) {
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const { setToken, setUser } = useGenesisStore()
   const [tab, setTab] = useState('email')   // email | phone
   const [phone, setPhone] = useState('')
   const [otp, setOtp] = useState('')
@@ -58,56 +61,59 @@ export default function LoginPage() {
   const err = (msg) => { setError(msg); setLoading(false) }
 
   const handleGoogle = () => {
-    window.location.href = `${API}/auth/google`
+    authAPI.googleLogin()
   }
 
   const handleSendOtp = async () => {
     if (!phone.startsWith('+')) return err('Phone must start with + and country code (e.g. +1…)')
     setLoading(true); setError('')
     try {
-      const res = await fetch(`${API}/auth/otp/send`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone }),
-      })
-      const data = await res.json()
-      if (!res.ok) return err(data.detail || 'Failed to send code')
+      const { data } = await authAPI.sendOtp(phone)
       setOtpSent(true); setSuccess('Code sent!'); setLoading(false)
-    } catch { err('Network error') }
+    } catch (e) {
+      err(e.response?.data?.detail || 'Failed to send code')
+    }
   }
 
   const handleVerifyOtp = async () => {
     if (!otp) return err('Enter the 6-digit code')
     setLoading(true); setError('')
     try {
-      const res = await fetch(`${API}/auth/otp/verify`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, code: otp }),
-      })
-      const data = await res.json()
-      if (!res.ok) return err(data.detail || 'Invalid code')
-      localStorage.setItem('genesis_token', data.access_token)
+      const { data } = await authAPI.verifyOtp(phone, otp)
+      setToken(data.access_token)
       if (data.refresh_token) localStorage.setItem('genesis_refresh', data.refresh_token)
+      
+      // Fetch user profile
+      try {
+        const meRes = await authAPI.me()
+        setUser(meRes.data)
+      } catch {}
+
       if (data.needs_name_setup) navigate('/setup-name')
       else navigate('/chat')
-    } catch { err('Network error') }
+    } catch (e) {
+      err(e.response?.data?.detail || 'Invalid code')
+    }
   }
 
   const handleEmailLogin = async () => {
     if (!username || !password) return err('Enter username and password')
     setLoading(true); setError('')
     try {
-      const form = new URLSearchParams({ username, password, grant_type: 'password' })
-      const res = await fetch(`${API}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: form,
-      })
-      const data = await res.json()
-      if (!res.ok) return err(data.detail || 'Invalid credentials')
-      localStorage.setItem('genesis_token', data.access_token)
+      const { data } = await authAPI.login(username, password)
+      setToken(data.access_token)
       if (data.refresh_token) localStorage.setItem('genesis_refresh', data.refresh_token)
+      
+      // Fetch user profile
+      try {
+        const meRes = await authAPI.me()
+        setUser(meRes.data)
+      } catch {}
+
       navigate('/chat')
-    } catch { err('Network error') }
+    } catch (e) {
+      err(e.response?.data?.detail || 'Invalid credentials')
+    }
   }
 
   return (

@@ -13,7 +13,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
     volumes:
-      - ./data:/app/data
+      - ./backend/data:/app/backend/data
     depends_on:
       mongo:
         condition: service_healthy
@@ -30,7 +30,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
     volumes:
-      - ./data:/app/data
+      - ./backend/data:/app/backend/data
     depends_on:
       - mongo
       - redis
