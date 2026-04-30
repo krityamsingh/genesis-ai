@@ -5,7 +5,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 RUN useradd -m -u 1000 genesis
 
-COPY requirements.txt .
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # ── Build frontend ─────────────────────────────────────────────────────────────
@@ -18,13 +18,13 @@ RUN npm run build 2>/dev/null || mkdir -p dist
 
 # ── Final image ────────────────────────────────────────────────────────────────
 FROM python:3.11-slim AS final
-WORKDIR /app
+WORKDIR /app/backend
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 RUN useradd -m -u 1000 genesis
 
 COPY --from=deps /usr/local/lib/python3.11 /usr/local/lib/python3.11
 COPY --from=deps /usr/local/bin /usr/local/bin
-COPY --chown=genesis:genesis . .
+COPY --chown=genesis:genesis backend/ .
 COPY --from=frontend --chown=genesis:genesis /app/frontend/dist ./frontend/dist
 
 USER genesis

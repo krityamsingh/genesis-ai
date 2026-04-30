@@ -1,10 +1,11 @@
-// frontend/src/pages/AuthCallback.jsx — handles Google OAuth redirect
-// Reads tokens from URL params, stores them, routes to setup-name or chat.
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import useGenesisStore from '../store/genesisStore'
+import { authAPI } from '../api/client'
 
 export default function AuthCallback() {
   const navigate = useNavigate()
+  const { setToken, setUser } = useGenesisStore()
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -18,11 +19,20 @@ export default function AuthCallback() {
       return
     }
 
-    localStorage.setItem('genesis_token',  access)
+    setToken(access)
     if (refresh) localStorage.setItem('genesis_refresh', refresh)
 
-    navigate(needsNs ? '/setup-name' : '/chat', { replace: true })
-  }, [navigate])
+    // Fetch user profile
+    const fetchMe = async () => {
+      try {
+        const meRes = await authAPI.me()
+        setUser(meRes.data)
+      } catch {}
+      navigate(needsNs ? '/setup-name' : '/chat', { replace: true })
+    }
+    
+    fetchMe()
+  }, [navigate, setToken, setUser])
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

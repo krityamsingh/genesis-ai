@@ -2,6 +2,8 @@
 // Polished Claude.ai-style auth: Google, OTP, email/password tabs
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import useGenesisStore from '../store/genesisStore'
+import { authAPI } from '../api/client'
 import '../styles/design-system.css'
 
 const API = '/api/v1'
@@ -44,6 +46,7 @@ function TabButton({ active, onClick, children }) {
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const { setToken, setUser } = useGenesisStore()
   const [tab, setTab] = useState('email')   // email | phone
   const [phone, setPhone] = useState('')
   const [otp, setOtp] = useState('')
@@ -58,56 +61,59 @@ export default function LoginPage() {
   const err = (msg) => { setError(msg); setLoading(false) }
 
   const handleGoogle = () => {
-    window.location.href = `${API}/auth/google`
+    authAPI.googleLogin()
   }
 
   const handleSendOtp = async () => {
     if (!phone.startsWith('+')) return err('Phone must start with + and country code (e.g. +1…)')
     setLoading(true); setError('')
     try {
-      const res = await fetch(`${API}/auth/otp/send`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone }),
-      })
-      const data = await res.json()
-      if (!res.ok) return err(data.detail || 'Failed to send code')
+      const { data } = await authAPI.sendOtp(phone)
       setOtpSent(true); setSuccess('Code sent!'); setLoading(false)
-    } catch { err('Network error') }
+    } catch (e) {
+      err(e.response?.data?.detail || 'Failed to send code')
+    }
   }
 
   const handleVerifyOtp = async () => {
     if (!otp) return err('Enter the 6-digit code')
     setLoading(true); setError('')
     try {
-      const res = await fetch(`${API}/auth/otp/verify`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, code: otp }),
-      })
-      const data = await res.json()
-      if (!res.ok) return err(data.detail || 'Invalid code')
-      localStorage.setItem('genesis_token', data.access_token)
+      const { data } = await authAPI.verifyOtp(phone, otp)
+      setToken(data.access_token)
       if (data.refresh_token) localStorage.setItem('genesis_refresh', data.refresh_token)
+      
+      // Fetch user profile
+      try {
+        const meRes = await authAPI.me()
+        setUser(meRes.data)
+      } catch {}
+
       if (data.needs_name_setup) navigate('/setup-name')
       else navigate('/chat')
-    } catch { err('Network error') }
+    } catch (e) {
+      err(e.response?.data?.detail || 'Invalid code')
+    }
   }
 
   const handleEmailLogin = async () => {
     if (!username || !password) return err('Enter username and password')
     setLoading(true); setError('')
     try {
-      const form = new URLSearchParams({ username, password, grant_type: 'password' })
-      const res = await fetch(`${API}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: form,
-      })
-      const data = await res.json()
-      if (!res.ok) return err(data.detail || 'Invalid credentials')
-      localStorage.setItem('genesis_token', data.access_token)
+      const { data } = await authAPI.login(username, password)
+      setToken(data.access_token)
       if (data.refresh_token) localStorage.setItem('genesis_refresh', data.refresh_token)
+      
+      // Fetch user profile
+      try {
+        const meRes = await authAPI.me()
+        setUser(meRes.data)
+      } catch {}
+
       navigate('/chat')
-    } catch { err('Network error') }
+    } catch (e) {
+      err(e.response?.data?.detail || 'Invalid credentials')
+    }
   }
 
   return (
@@ -123,7 +129,6 @@ export default function LoginPage() {
         flex: 1,
         background: 'linear-gradient(135deg, #1C1917 0%, #292524 50%, #1C1917 100%)',
         position: 'relative', overflow: 'hidden',
-        '@media (min-width: 768px)': { display: 'flex' },
       }}
         className="login-panel"
       >
@@ -180,7 +185,10 @@ export default function LoginPage() {
 
           {/* Email tab */}
           {tab === 'email' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <form 
+              onSubmit={(e) => { e.preventDefault(); handleEmailLogin(); }}
+              style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+            >
               <div>
                 <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-2)', display: 'block', marginBottom: 6 }}>
                   Username
@@ -188,10 +196,11 @@ export default function LoginPage() {
                 <input
                   className="input"
                   type="text"
+                  name="username"
+                  autoComplete="username"
                   value={username}
                   onChange={e => setUsername(e.target.value)}
                   placeholder="your_username"
-                  onKeyDown={e => e.key === 'Enter' && handleEmailLogin()}
                   autoFocus
                 />
               </div>
@@ -203,13 +212,15 @@ export default function LoginPage() {
                   <input
                     className="input"
                     type={showPw ? 'text' : 'password'}
+                    name="password"
+                    autoComplete="current-password"
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    onKeyDown={e => e.key === 'Enter' && handleEmailLogin()}
                     style={{ paddingRight: 44 }}
                   />
                   <button
+                    type="button"
                     onClick={() => setShowPw(s => !s)}
                     style={{
                       position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
@@ -231,23 +242,26 @@ export default function LoginPage() {
               )}
 
               <button
+                type="submit"
                 className="btn btn-primary"
                 style={{ width: '100%', justifyContent: 'center', height: 44, marginTop: 4 }}
-                onClick={handleEmailLogin}
                 disabled={loading}
               >
                 {loading ? (
                   <span style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} />
                 ) : 'Sign in'}
               </button>
-            </div>
+            </form>
           )}
 
           {/* Phone tab */}
           {tab === 'phone' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {!otpSent ? (
-                <>
+                <form 
+                  onSubmit={(e) => { e.preventDefault(); handleSendOtp(); }}
+                  style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+                >
                   <div>
                     <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-2)', display: 'block', marginBottom: 6 }}>
                       Phone number
@@ -255,6 +269,8 @@ export default function LoginPage() {
                     <input
                       className="input"
                       type="tel"
+                      name="phone"
+                      autoComplete="tel"
                       value={phone}
                       onChange={e => setPhone(e.target.value)}
                       placeholder="+1 (555) 000-0000"
@@ -267,29 +283,33 @@ export default function LoginPage() {
                     </div>
                   )}
                   <button
+                    type="submit"
                     className="btn btn-primary"
                     style={{ width: '100%', justifyContent: 'center', height: 44 }}
-                    onClick={handleSendOtp}
                     disabled={loading}
                   >
                     {loading ? <span style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} /> : 'Send code'}
                   </button>
-                </>
+                </form>
               ) : (
-                <>
+                <form 
+                  onSubmit={(e) => { e.preventDefault(); handleVerifyOtp(); }}
+                  style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+                >
                   <p style={{ fontSize: 14, color: 'var(--text-2)', textAlign: 'center' }}>
                     Enter the 6-digit code sent to <strong>{phone}</strong>
                   </p>
                   <input
                     className="input"
                     type="text"
+                    name="otp"
+                    autoComplete="one-time-code"
                     value={otp}
                     onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     placeholder="000000"
                     style={{ textAlign: 'center', fontSize: 22, letterSpacing: 8, fontFamily: 'var(--font-mono)' }}
                     autoFocus
                     maxLength={6}
-                    onKeyDown={e => e.key === 'Enter' && handleVerifyOtp()}
                   />
                   {error && (
                     <div style={{ padding: '10px 14px', borderRadius: 'var(--r-md)', background: 'var(--error-bg)', color: 'var(--error)', fontSize: 13 }}>
@@ -302,21 +322,22 @@ export default function LoginPage() {
                     </div>
                   )}
                   <button
+                    type="submit"
                     className="btn btn-primary"
                     style={{ width: '100%', justifyContent: 'center', height: 44 }}
-                    onClick={handleVerifyOtp}
                     disabled={loading || otp.length < 6}
                   >
                     {loading ? <span style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} /> : 'Verify & sign in'}
                   </button>
                   <button
+                    type="button"
                     className="btn btn-ghost"
                     style={{ width: '100%', justifyContent: 'center', fontSize: 13 }}
                     onClick={() => { setOtpSent(false); setOtp(''); setError(''); setSuccess('') }}
                   >
                     ← Change number
                   </button>
-                </>
+                </form>
               )}
             </div>
           )}

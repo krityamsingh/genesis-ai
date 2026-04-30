@@ -1,12 +1,12 @@
-// frontend/src/pages/NameSetupPage.jsx — v3 UPGRADE
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import useGenesisStore from '../store/genesisStore'
+import { authAPI } from '../api/client'
 import '../styles/design-system.css'
-
-const API = '/api/v1'
 
 export default function NameSetupPage() {
   const navigate = useNavigate()
+  const { setUser } = useGenesisStore()
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -14,16 +14,20 @@ export default function NameSetupPage() {
   const handleSubmit = async () => {
     if (!name.trim()) return setError('Please enter your name')
     setLoading(true); setError('')
-    const token = localStorage.getItem('genesis_token')
     try {
-      const res = await fetch(`${API}/auth/setup-name`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ display_name: name.trim() }),
-      })
-      if (!res.ok) { const d = await res.json(); throw new Error(d.detail || 'Failed') }
+      const res = await authAPI.setupName(name.trim())
+      
+      // Update store with new name
+      try {
+        const meRes = await authAPI.me()
+        setUser(meRes.data)
+      } catch {}
+
       navigate('/chat')
-    } catch (e) { setError(e.message); setLoading(false) }
+    } catch (e) { 
+      setError(e.response?.data?.detail || e.message)
+      setLoading(false) 
+    }
   }
 
   return (

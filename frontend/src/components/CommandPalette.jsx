@@ -1,225 +1,163 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { toast } from '../lib/toast'
+import useGenesisStore from '../store/genesisStore'
 
-const COMMANDS = [
-  { section: 'Pages', items: [
-    { icon: '⊞', label: 'Dashboard',  path: '/dashboard' },
-    { icon: '◻', label: 'Chat',       path: '/chat'      },
-    { icon: '◈', label: 'Knowledge',  path: '/knowledge' },
-    { icon: '⬡', label: 'Modules',    path: '/modules'   },
-    { icon: '◷', label: 'Timeline',   path: '/timeline'  },
-    { icon: '⌾', label: 'Voice',      path: '/voice'     },
-    { icon: '⚙', label: 'Settings',   path: '/settings'  },
-    { icon: '◫', label: 'Admin',      path: '/admin'     },
-  ]},
-  { section: 'Actions', items: [
-    { icon: '✚', label: 'New Chat',           action: 'new-chat'     },
-    { icon: '⟳', label: 'Clear Chat History', action: 'clear-chat'   },
-    { icon: '↑', label: 'Upload PDF',          action: 'upload-pdf'  },
-    { icon: '⚡', label: 'Enable All Modules',  action: 'enable-all'  },
-    { icon: '◫', label: 'System Health Check', action: 'health-check'},
-  ]},
-  { section: 'Modules', items: [
-    { icon: '🧠', label: 'M1 · Self-Learner',   path: '/modules' },
-    { icon: '🔬', label: 'M2 · Research Accel', path: '/modules' },
-    { icon: '⚡', label: 'M3 · AI Builder',      path: '/modules' },
-    { icon: '⏳', label: 'M4 · Time Reconstruct',path: '/modules' },
-    { icon: '✦',  label: 'M5 · Intuition Engine',path: '/modules' },
-    { icon: '◈', label: 'M6 · Reality Sim',     path: '/modules' },
-  ]},
+const ITEMS = [
+  { label: 'Dashboard',          sub: 'System overview & live metrics',       to: '/dashboard', icon: '▦' },
+  { label: 'Open Chat',          sub: 'New conversation with GENESIS',         to: '/chat',      icon: '⌨' },
+  { label: 'Knowledge Graph',    sub: 'Explore concept connections (D3)',       to: '/knowledge', icon: '⬡' },
+  { label: 'Manage Modules',     sub: 'Enable / disable AI modules',           to: '/modules',   icon: '⊞' },
+  { label: 'Timeline',           sub: 'M4 temporal reconstruction',            to: '/timeline',  icon: '◷' },
+  { label: 'Voice Interface',    sub: 'Whisper STT + gTTS TTS',                to: '/voice',     icon: '◎' },
+  { label: 'Admin Panel',        sub: 'Users · training · health · logs',      to: '/admin',     icon: '⚙' },
 ]
 
-export default function CommandPalette({ onClose }) {
-  const [query,    setQuery]    = useState('')
-  const [selected, setSelected] = useState(0)
-  const inputRef   = useRef(null)
-  const navigate   = useNavigate()
+export default function CommandPalette() {
+  const { cmdOpen, closeCmd } = useGenesisStore()
+  const [query, setQuery] = useState('')
+  const [sel,   setSel]   = useState(0)
+  const inputRef          = useRef(null)
+  const navigate          = useNavigate()
 
-  // Focus on mount
-  useEffect(() => {
-    setTimeout(() => inputRef.current?.focus(), 50)
-  }, [])
-
-  // Filter commands
   const filtered = query
-    ? COMMANDS.map(section => ({
-        ...section,
-        items: section.items.filter(item =>
-          item.label.toLowerCase().includes(query.toLowerCase())
-        ),
-      })).filter(s => s.items.length > 0)
-    : COMMANDS
+    ? ITEMS.filter(i =>
+        i.label.toLowerCase().includes(query.toLowerCase()) ||
+        i.sub.toLowerCase().includes(query.toLowerCase())
+      )
+    : ITEMS
 
-  // Flatten for keyboard navigation
-  const flat = filtered.flatMap(s => s.items)
-
-  const clamp = (v) => Math.max(0, Math.min(v, flat.length - 1))
-
-  const run = useCallback((item) => {
-    if (item.path) {
-      navigate(item.path)
-    } else if (item.action) {
-      const ACTIONS = {
-        'new-chat':    () => { navigate('/chat');                      toast('New chat started', 'success')         },
-        'clear-chat':  () =>                                           toast('Chat cleared', 'info')                 ,
-        'upload-pdf':  () =>                                           toast('PDF upload dialog opened', 'info')     ,
-        'enable-all':  () =>                                           toast('All modules enabled', 'success')       ,
-        'health-check':() => { navigate('/admin');                     toast('Checking system health…', 'info')     },
-      }
-      ACTIONS[item.action]?.()
+  // Focus & reset on open
+  useEffect(() => {
+    if (cmdOpen) {
+      setQuery(''); setSel(0)
+      setTimeout(() => inputRef.current?.focus(), 30)
     }
-    onClose()
-  }, [navigate, onClose])
+  }, [cmdOpen])
 
-  const onKeyDown = (e) => {
-    if (e.key === 'Escape')    { onClose(); return }
-    if (e.key === 'ArrowDown') { e.preventDefault(); setSelected(s => clamp(s + 1)) }
-    if (e.key === 'ArrowUp')   { e.preventDefault(); setSelected(s => clamp(s - 1)) }
-    if (e.key === 'Enter')     { if (flat[selected]) run(flat[selected]) }
+  // Global ⌘K / Ctrl+K
+  useEffect(() => {
+    const onKey = e => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        cmdOpen ? closeCmd() : useGenesisStore.getState().openCmd()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [cmdOpen, closeCmd])
+
+  const go = (item) => {
+    navigate(item.to)
+    closeCmd()
   }
 
-  // Reset selection on query change
-  useEffect(() => setSelected(0), [query])
+  const onKey = (e) => {
+    if (e.key === 'Escape')   { closeCmd(); return }
+    if (e.key === 'ArrowDown'){ e.preventDefault(); setSel(s => Math.min(s + 1, filtered.length - 1)) }
+    if (e.key === 'ArrowUp')  { e.preventDefault(); setSel(s => Math.max(s - 1, 0)) }
+    if (e.key === 'Enter')    { e.preventDefault(); filtered[sel] && go(filtered[sel]) }
+  }
 
-  let flatIdx = 0
+  if (!cmdOpen) return null
 
   return (
-    <>
-      <style>{`
-        @keyframes cmdFadeIn {
-          from { opacity: 0; transform: translateY(-8px) scale(.98); }
-          to   { opacity: 1; transform: translateY(0) scale(1); }
-        }
-      `}</style>
-
-      {/* Backdrop */}
+    <div
+      onClick={closeCmd}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 999,
+        background: 'rgba(6,6,10,.88)',
+        backdropFilter: 'blur(5px)',
+        display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+        paddingTop: '80px',
+      }}
+    >
       <div
-        onClick={onClose}
+        onClick={e => e.stopPropagation()}
+        className="animate-slideup"
         style={{
-          position:        'fixed',
-          inset:           0,
-          background:      'rgba(0,0,0,.6)',
-          zIndex:          'var(--z-modal)',
-          display:         'flex',
-          alignItems:      'flex-start',
-          justifyContent:  'center',
-          paddingTop:      '80px',
-          backdropFilter:  'blur(4px)',
+          width: '480px',
+          background: 'var(--bg2)',
+          border: '1px solid var(--b2)',
+          borderRadius: 10,
+          boxShadow: '0 28px 60px rgba(0,0,0,.7)',
+          overflow: 'hidden',
         }}
       >
-        {/* Modal */}
-        <div
-          onClick={e => e.stopPropagation()}
-          style={{
-            background:   'var(--bg-surface)',
-            border:       '1px solid var(--border-default)',
-            borderRadius: '16px',
-            width:        '540px',
-            overflow:     'hidden',
-            boxShadow:    'var(--shadow-lg), 0 0 0 1px var(--border-subtle)',
-            animation:    'cmdFadeIn 200ms var(--ease-out)',
-          }}
-        >
-          {/* Search input */}
-          <div style={{
-            display:     'flex',
-            alignItems:  'center',
-            gap:         '12px',
-            padding:     '14px 16px',
-            borderBottom:'1px solid var(--border-subtle)',
-          }}>
-            <span style={{ fontSize: '18px', color: 'var(--text-muted)' }}>⌘</span>
-            <input
-              ref={inputRef}
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              onKeyDown={onKeyDown}
-              placeholder="Search pages, actions, modules…"
+        {/* Search bar */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderBottom: '1px solid var(--b0)' }}>
+          <span style={{ color: 'var(--acc)', fontSize: 13 }}>⌕</span>
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={e => { setQuery(e.target.value); setSel(0) }}
+            onKeyDown={onKey}
+            placeholder="Search commands..."
+            style={{
+              flex: 1, background: 'transparent', border: 'none',
+              fontSize: 14, color: 'var(--t0)', outline: 'none',
+              fontFamily: '"IBM Plex Mono", monospace',
+            }}
+          />
+          <span style={{
+            fontSize: 10, color: 'var(--t2)',
+            border: '1px solid var(--b1)',
+            padding: '2px 6px', borderRadius: 3,
+          }}>ESC</span>
+        </div>
+
+        {/* Results */}
+        <div style={{ maxHeight: 300, overflowY: 'auto', padding: 5 }}>
+          {filtered.length === 0 ? (
+            <div style={{ padding: '20px', textAlign: 'center', color: 'var(--t2)', fontSize: 12 }}>
+              No results for &ldquo;{query}&rdquo;
+            </div>
+          ) : filtered.map((item, i) => (
+            <button
+              key={item.to}
+              onClick={() => go(item)}
+              onMouseEnter={() => setSel(i)}
               style={{
-                background:   'transparent',
-                border:       'none',
-                boxShadow:    'none',
-                fontSize:     '15px',
-                color:        'var(--text-primary)',
-                flex:         1,
-                padding:      0,
-                outline:      'none',
+                width: '100%',
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '9px 10px', borderRadius: 6,
+                background: i === sel ? 'var(--bg3)' : 'transparent',
+                border: `1px solid ${i === sel ? 'var(--b1)' : 'transparent'}`,
+                color: i === sel ? 'var(--t0)' : 'var(--t1)',
+                textAlign: 'left', cursor: 'pointer',
+                fontFamily: '"IBM Plex Mono", monospace',
+                transition: 'background .1s',
               }}
-            />
-            {query && (
-              <button onClick={() => setQuery('')} style={{ color: 'var(--text-muted)', fontSize: '16px' }}>×</button>
-            )}
-          </div>
-
-          {/* Results */}
-          <div style={{ maxHeight: '380px', overflowY: 'auto' }}>
-            {filtered.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '28px', color: 'var(--text-muted)', fontSize: '13px' }}>
-                No results for "{query}"
+            >
+              <div style={{
+                width: 28, height: 28, borderRadius: 5, flexShrink: 0,
+                background: i === sel ? 'rgba(245,158,11,.1)' : 'var(--bg2)',
+                border: `1px solid ${i === sel ? 'rgba(245,158,11,.25)' : 'var(--b0)'}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 13,
+              }}>
+                {item.icon}
               </div>
-            ) : (
-              filtered.map(section => (
-                <div key={section.section} style={{ padding: '8px 8px 4px' }}>
-                  <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--text-muted)', padding: '4px 8px', marginBottom: '2px' }}>
-                    {section.section}
-                  </div>
-                  {section.items.map(item => {
-                    const idx = flatIdx++
-                    return (
-                      <div
-                        key={item.label}
-                        onClick={() => run(item)}
-                        style={{
-                          display:      'flex',
-                          alignItems:   'center',
-                          gap:          '10px',
-                          padding:      '8px 10px',
-                          borderRadius: '8px',
-                          cursor:       'pointer',
-                          color:        idx === selected ? 'var(--text-primary)' : 'var(--text-secondary)',
-                          background:   idx === selected ? 'var(--accent-dim)'   : 'transparent',
-                          fontSize:     '13px',
-                          transition:   'background 80ms',
-                        }}
-                        onMouseEnter={() => setSelected(idx)}
-                      >
-                        <span style={{ fontSize: '14px', width: '20px', textAlign: 'center', flexShrink: 0 }}>
-                          {item.icon}
-                        </span>
-                        {item.label}
-                        {item.path && (
-                          <span style={{ marginLeft: 'auto', fontSize: '11px', color: 'var(--text-muted)', fontFamily: "'JetBrains Mono', monospace" }}>
-                            ↵
-                          </span>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              ))
-            )}
-          </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13 }}>{item.label}</div>
+                <div style={{ fontSize: 10, color: 'var(--t2)', marginTop: 1 }}>{item.sub}</div>
+              </div>
+              {i === sel && <span style={{ color: 'var(--acc)', fontSize: 12 }}>›</span>}
+            </button>
+          ))}
+        </div>
 
-          {/* Footer */}
-          <div style={{
-            padding:     '8px 16px',
-            borderTop:   '1px solid var(--border-subtle)',
-            display:     'flex',
-            gap:         '12px',
-            fontSize:    '11px',
-            color:       'var(--text-muted)',
-            fontFamily:  "'JetBrains Mono', monospace",
-          }}>
-            {[['↑↓', 'navigate'], ['↵', 'select'], ['esc', 'close']].map(([k, l]) => (
-              <span key={k}>
-                <span style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: '4px', padding: '1px 5px', marginRight: '4px' }}>{k}</span>
-                {l}
-              </span>
-            ))}
-          </div>
+        {/* Footer */}
+        <div style={{
+          padding: '7px 14px',
+          borderTop: '1px solid var(--b0)',
+          display: 'flex', gap: 14, fontSize: 10, color: 'var(--t2)',
+        }}>
+          <span>↑↓ navigate</span>
+          <span>↵ open</span>
+          <span>esc close</span>
+          <span style={{ marginLeft: 'auto', color: 'var(--acc)' }}>⌘K</span>
         </div>
       </div>
-    </>
+    </div>
   )
 }

@@ -32,42 +32,42 @@ help:
 	@echo ""
 
 install:
-	$(PIP) install --upgrade pip
-	$(PIP) install -r requirements.txt
+	cd backend && $(PIP) install --upgrade pip
+	cd backend && $(PIP) install -r requirements.txt
 
 install-dev:
-	$(PIP) install --upgrade pip
-	$(PIP) install -r requirements-dev.txt
+	cd backend && $(PIP) install --upgrade pip
+	cd backend && $(PIP) install -r requirements-dev.txt
 
 lint:
-	ruff check .
-	mypy . --ignore-missing-imports
+	cd backend && ruff check .
+	cd backend && mypy . --ignore-missing-imports
 
 format:
-	black .
-	ruff check . --fix
+	cd backend && black .
+	cd backend && ruff check . --fix
 
 test:
-	pytest tests/ -v
+	cd backend && pytest tests/ -v
 
 test-cov:
-	pytest tests/ -v --cov=. --cov-report=term-missing --cov-report=html
+	cd backend && pytest tests/ -v --cov=. --cov-report=term-missing --cov-report=html
 
 dev:
-	uvicorn api.main:app --reload --port $(PORT) --log-level info
+	cd backend && uvicorn api.main:app --reload --port $(PORT) --log-level info --env-file ../.env
 
 dev-frontend:
 	cd frontend && npm run dev
 
 dev-admin:
-	cd admin/frontend && npm run dev
+	cd backend/admin/frontend && npm run dev
 
 build-frontend:
 	cd frontend && npm install && npm run build
-	cd admin/frontend && npm install && npm run build
+	cd backend/admin/frontend && npm install && npm run build
 
 seed:
-	$(PYTHON) scripts/seed_data.py
+	cd backend && $(PYTHON) scripts/seed_data.py
 
 docker-build:
 	docker build -t genesis-ai:2.1.0 .
@@ -83,5 +83,5 @@ clean:
 	find . -name "*.pyc" -delete 2>/dev/null || true
 	find . -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
 	find . -name ".ruff_cache" -exec rm -rf {} + 2>/dev/null || true
-	rm -rf htmlcov .coverage coverage.xml 2>/dev/null || true
-	rm -rf frontend/dist admin/frontend/dist 2>/dev/null || true
+	rm -rf backend/htmlcov backend/.coverage backend/coverage.xml 2>/dev/null || true
+	rm -rf frontend/dist backend/admin/frontend/dist 2>/dev/null || true

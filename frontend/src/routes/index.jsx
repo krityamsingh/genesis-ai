@@ -6,7 +6,6 @@ import Loader        from '../components/Loader'
 import NotFound      from '../components/NotFound'
 
 const App        = lazy(() => import('../App'))
-const Login      = lazy(() => import('../pages/login'))
 const Dashboard  = lazy(() => import('../pages/Dashboard'))
 const ModulePanel= lazy(() => import('../pages/Modules'))
 const KnowledgeG = lazy(() => import('../pages/Knowledge'))
@@ -16,7 +15,6 @@ const VoiceInput = lazy(() => import('../pages/Voice'))
 const wrap = (el) => <Suspense fallback={<Loader />}>{el}</Suspense>
 
 const router = createBrowserRouter([
-  { path: '/login', element: wrap(<Login />) },
   {
     path: '/',
     element: <PrivateRoute>{wrap(<App />)}</PrivateRoute>,
